@@ -1,0 +1,10 @@
+target
+.m2
+.git
+.idea
+logs
+*.log
+node_modules
+npm-debug.log
+Dockerfile
+docker-compose.yml

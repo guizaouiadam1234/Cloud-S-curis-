@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    image: projet_cloud_securise_backend:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m
+    restart: unless-stopped
