@@ -5,6 +5,20 @@ services:
     image: projet_cloud_securise_backend:latest
     ports:
       - "8080:8080"
+      - database
+  database:
+    image: postgres:13.4
+    environment:
+      POSTGRES_DB: cloud_secure_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  db_data:
+
     environment:
       - JAVA_OPTS=-Xms256m -Xmx512m
     restart: unless-stopped

@@ -18,10 +18,23 @@ function App() {
   );
 }
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+
 function getBooks () {
-  
-  fetch("<host_a_changer>/librairy/books")
-  .then(response => response.json())
+  fetch(`${API_BASE}/librairy/books`)
+  .then(async response => {
+    const ct = response.headers.get('content-type') || '';
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`HTTP ${response.status}: ${body}`);
+    }
+    if (ct.includes('application/json')) {
+      return response.json();
+    }
+    // If the server returned HTML or other unexpected content, capture it
+    const text = await response.text();
+    throw new Error('Expected JSON but received: ' + text.slice(0,200));
+  })
   .then(data => {
       const books = data;
       console.log(books)
@@ -40,7 +53,6 @@ function getBooks () {
       }
   })
   .catch(error => console.log("Erreur lors de l'appel au back end de la librairie, Erreur : " + error));
-
 
 }
 
