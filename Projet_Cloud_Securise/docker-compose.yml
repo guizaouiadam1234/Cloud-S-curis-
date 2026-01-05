@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   mongodb:
     image: mongo:latest
@@ -6,19 +8,63 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    networks:
+        - gatcha-network
 
-  app:
-    image: openjdk:17-jdk
-    container_name: gatcha-app
+  auth-api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ./auth-api
+    container_name: auth-api
     ports:
-      - "8080:8080"
+      - "8081:8081"
     depends_on:
       - mongodb
     environment:
       SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/gatcha
+    networks:
+        - gatcha-network
+
+  monstre-api:
+    build:
+      context: ./monstre-api
+    container_name: monstre-api
+    ports:
+      - "8083:8083"
+    depends_on:
+      - mongodb
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/gatcha
+    networks:
+        - gatcha-network
+
+  player-api:
+    build:
+      context: ./player-api
+    container_name: player-api
+    ports:
+      - "8082:8082"
+    depends_on:
+      - mongodb
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/gatcha
+    networks:
+        - gatcha-network
+
+  invocation-api:
+    build:
+      context: ./invocation-api
+    container_name: invocation-api
+    ports:
+      - "8084:8084"
+    depends_on:
+      - mongodb
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/gatcha
+    networks:
+        - gatcha-network
 
 volumes:
   mongo-data:
+
+networks:
+    gatcha-network:

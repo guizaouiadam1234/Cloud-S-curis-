@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Successful</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<h1>Login Successful</h1>
+<p>Welcome to the Gatcha API!</p>
+<p>Your token: <span id="token"></span></p>
+<p>Please copy the token for future use.</p>
+<script>
+    // Get the token from the URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+        // Display the token
+        document.getElementById('token').textContent = token;
+    } else {
+        console.error('Token not found in URL parameters');
+    }
+</script>
+</body>
+</html>
