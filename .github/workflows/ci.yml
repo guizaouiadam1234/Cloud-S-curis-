@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0 
+        fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -30,12 +30,32 @@ jobs:
 
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@master
-      with:
-        projectBaseDir: Projet_Cloud_Securise/backend
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        SONAR_PROJECT_KEY: ${{ github.repository }}-backend
+        SONAR_PROJECT_KEY: ${{ github.repository }}
+    - name: Check SonarQube Quality Gate
+      if: env.SONAR_HOST_URL != '' && env.SONAR_TOKEN != ''
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        SONAR_PROJECT_KEY: ${{ github.repository }}
+      run: |
+        set -e
+        echo "Polling SonarQube for quality gate status (project: $SONAR_PROJECT_KEY)..."
+        for i in $(seq 1 30); do
+          status=$(curl -s -u $SONAR_TOKEN: "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" | python3 -c "import sys,json;print(json.load(sys.stdin)['projectStatus']['status'])") || true
+          echo "SonarQube status: $status"
+          if [ "$status" = "OK" ]; then
+            echo "Quality gate passed"
+            break
+          fi
+          if [ "$status" = "ERROR" ] || [ "$status" = "NONE" ]; then
+            echo "Quality gate failed: $status"
+            exit 1
+          fi
+          sleep 10
+        done
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
@@ -47,8 +67,7 @@ jobs:
     - name: Build and push backend Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./Projet_Cloud_Securise/backend
-        file: ./Projet_Cloud_Securise/backend/Dockerfile
+        context: Projet_Cloud_Securise/backend
         push: true
         tags: ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
 
@@ -69,7 +88,7 @@ jobs:
         run: npm install
         working-directory: Projet_Cloud_Securise/frontend
       - name: Run tests
-        run: npm test -- --watchAll=false
+        run: npm test
         working-directory: Projet_Cloud_Securise/frontend
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -80,8 +99,7 @@ jobs:
       - name: Build and push frontend Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./Projet_Cloud_Securise/frontend
-          file: ./Projet_Cloud_Securise/frontend/Dockerfile
+          context: Projet_Cloud_Securise/frontend
           push: true
           tags: ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
 
@@ -101,31 +119,66 @@ jobs:
             docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
 
             # --- Backend deploy with rollback support ---
+            echo "Preparing backend deployment"
             if docker ps -a --format '{{.Names}}' | grep -q '^backend-app$'; then
+              echo "Found existing backend-app, tagging current image as backup"
               CURRENT_IMAGE=$(docker inspect --format='{{.Image}}' backend-app)
               docker tag $CURRENT_IMAGE ghcr.io/${{ github.repository }}/backend:previous || true
             fi
 
+            echo "Pulling new backend image"
             docker pull ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+            echo "Starting new backend container"
             docker stop backend-app || true
             docker rm backend-app || true
             docker run -d --name backend-app -p 8080:8080 ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
 
-            # Health check using your actual API path
-            sleep 10
-            if ! curl -sf http://127.0.0.1:8080/librairy/books >/dev/null 2>&1; then
-              echo "Backend failed — rolling back"
+            # Health check (adjust path if needed)
+            echo "Waiting for backend to become healthy"
+            sleep 5
+            if ! curl -sf http://127.0.0.1:8080/actuator/health >/dev/null 2>&1; then
+              echo "Backend healthcheck failed — attempting rollback"
               docker stop backend-app || true
               docker rm backend-app || true
-              docker run -d --name backend-app -p 8080:8080 ghcr.io/${{ github.repository }}/backend:previous
+              if docker images --format '{{.Repository}}:{{.Tag}}' | grep -q 'backend:previous'; then
+                docker run -d --name backend-app -p 8080:8080 ghcr.io/${{ github.repository }}/backend:previous
+                echo "Rolled back to previous backend image"
+              else
+                echo "No previous image available to rollback"
+                exit 1
+              fi
+            else
+              echo "Backend is healthy"
             fi
 
-            # --- Frontend deploy ---
+            # --- Frontend deploy with rollback support ---
+            echo "Preparing frontend deployment"
             if docker ps -a --format '{{.Names}}' | grep -q '^frontend-app$'; then
-              docker tag ghcr.io/${{ github.repository }}/frontend:latest ghcr.io/${{ github.repository }}/frontend:previous || true
+              echo "Found existing frontend-app, tagging current image as backup"
+              CURRENT_IMAGE_F=$(docker inspect --format='{{.Image}}' frontend-app)
+              docker tag $CURRENT_IMAGE_F ghcr.io/${{ github.repository }}/frontend:previous || true
             fi
 
+            echo "Pulling new frontend image"
             docker pull ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+            echo "Starting new frontend container"
             docker stop frontend-app || true
             docker rm frontend-app || true
             docker run -d --name frontend-app -p 80:80 ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+
+            echo "Waiting for frontend to become healthy"
+            sleep 5
+            if ! curl -sf http://127.0.0.1/ >/dev/null 2>&1; then
+              echo "Frontend healthcheck failed — attempting rollback"
+              docker stop frontend-app || true
+              docker rm frontend-app || true
+              if docker images --format '{{.Repository}}:{{.Tag}}' | grep -q 'frontend:previous'; then
+                docker run -d --name frontend-app -p 80:80 ghcr.io/${{ github.repository }}/frontend:previous
+                echo "Rolled back to previous frontend image"
+              else
+                echo "No previous frontend image available to rollback"
+                exit 1
+              fi
+            else
+              echo "Frontend is healthy"
+            fi
