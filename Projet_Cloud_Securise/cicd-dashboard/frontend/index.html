@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CI/CD Dashboard</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 </head>
 <body>
   <header>
@@ -22,7 +24,11 @@
 
   <main>
     <div id="status">Idle</div>
-    <div id="runs"></div>
+    <div id="runs">
+      <div id="chart-container">
+        <canvas id="workflowChart"></canvas>
+      </div>
+    </div>
   </main>
 
   <script src="app.js"></script>
