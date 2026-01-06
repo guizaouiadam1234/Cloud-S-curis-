@@ -16,8 +16,31 @@ if (!TOKEN) {
 app.use(cors());
 app.use(express.json());
 
-// Serve frontend static files from ../frontend
-const staticFolder = path.join(__dirname, '..', 'frontend');
+// Resolve frontend static folder from a few likely locations so server works
+const candidates = [
+  path.join(__dirname, 'frontend'),           // proxy/frontend (if copied inside proxy)
+  path.join(__dirname, '..', 'frontend'),    // ../frontend (sibling folder)
+];
+
+let staticFolder = null;
+for (const c of candidates) {
+  try {
+    if (require('fs').statSync(c).isDirectory()) { staticFolder = c; break; }
+  } catch (e) {
+    // ignore
+  }
+}
+
+if (!staticFolder) {
+  console.error('Could not locate frontend folder. Tried:');
+  candidates.forEach(c => console.error(' -', c));
+  console.error('If you run the Docker image, build from the repository root so the frontend folder is included in the image:');
+  console.error('  docker build -f cicd-dashboard/proxy/Dockerfile -t cicd-dashboard-proxy:latest .');
+  console.error('Or run locally from the repository root so ../frontend exists relative to the proxy folder.');
+  process.exit(1);
+}
+
+console.log('Serving static files from', staticFolder);
 app.use(express.static(staticFolder));
 
 app.get('/api/runs', async (req, res) => {

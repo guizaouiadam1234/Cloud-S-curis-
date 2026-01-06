@@ -21,8 +21,28 @@ cp .env.example .env
 3. Start the proxy (it will also serve the static dashboard):
 
 ```bash
+# Run locally from the proxy folder (expects ../frontend to exist):
+cd cicd-dashboard/proxy
 npm start
 # open http://localhost:3000
+```
+
+Docker build note
+
+If you want to build the proxy into a container and include the `frontend` files, build from the repository root so the build context contains the sibling `frontend` folder:
+
+```bash
+# from repository root (one level above cicd-dashboard)
+docker build -f cicd-dashboard/proxy/Dockerfile -t cicd-dashboard-proxy:latest .
+docker run -p 3000:3000 --env-file cicd-dashboard/proxy/.env cicd-dashboard-proxy:latest
+```
+
+Or build by changing directory into `cicd-dashboard` and using `.` as context:
+
+```bash
+cd cicd-dashboard
+docker build -f proxy/Dockerfile -t cicd-dashboard-proxy:latest .
+docker run -p 3000:3000 --env-file proxy/.env cicd-dashboard-proxy:latest
 ```
 
 Notes
