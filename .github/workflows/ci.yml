@@ -12,7 +12,9 @@ jobs:
     permissions:
       contents: read
       packages: write
-
+    defaults:
+      run:
+        working-directory: ./Projet_Cloud_Securise/backend
     steps:
     - uses: actions/checkout@v4
       with:
@@ -25,44 +27,15 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    - name: Build with Maven
-      # Ensures the build runs specifically for the backend module [cite: 9, 24]
-      run: mvn -B -f Projet_Cloud_Securise/backend/pom.xml clean verify
-
-    - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@master
-      with:
-        # Directs the scanner to the backend source code 
-        projectBaseDir: Projet_Cloud_Securise/backend
+    - name: Build and Analyze with Maven
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        # Use your specific SonarCloud Organization key here
-        SONAR_ORGANIZATION: "guizaouiadam1234"
-        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-
-    - name: Check SonarQube Quality Gate
-      if: env.SONAR_HOST_URL != '' && env.SONAR_TOKEN != ''
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
       run: |
-        set -e
-        echo "Polling SonarQube for quality gate status..."
-        for i in $(seq 1 30); do
-          status=$(curl -s -u $SONAR_TOKEN: "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" | python3 -c "import sys,json;print(json.load(sys.stdin)['projectStatus']['status'])") || true
-          echo "SonarQube status: $status"
-          if [ "$status" = "OK" ]; then
-            echo "Quality gate passed"
-            break
-          fi
-          if [ "$status" = "ERROR" ] || [ "$status" = "NONE" ]; then
-            echo "Quality gate failed: $status"
-            exit 1
-          fi
-          sleep 10
-        done
+        mvn -B clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+          -Dsonar.projectKey=guizaouiadam1234_cloud_securise \
+          -Dsonar.organization=guizaouiadam1234 \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.token=$SONAR_TOKEN
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
@@ -75,10 +48,9 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: ./Projet_Cloud_Securise/backend
-        # Specifies the exact Dockerfile location to avoid "file not found" errors 
         file: ./Projet_Cloud_Securise/backend/Dockerfile
         push: true
-        # Clean tag format to avoid invalid reference errors caused by repository special characters
+        # Clean naming for Docker to avoid reference errors [cite: 25]
         tags: ghcr.io/${{ github.actor }}/cloud-securise-backend:${{ github.sha }}
 
   build_frontend:
@@ -86,6 +58,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    defaults:
+      run:
+        working-directory: ./Projet_Cloud_Securise/frontend
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js
@@ -94,9 +69,9 @@ jobs:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: Projet_Cloud_Securise/frontend/package-lock.json
+      
       - name: Install dependencies
-        run: npm install
-        working-directory: Projet_Cloud_Securise/frontend
+        run: npm ci
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -111,5 +86,4 @@ jobs:
           context: ./Projet_Cloud_Securise/frontend
           file: ./Projet_Cloud_Securise/frontend/Dockerfile
           push: true
-          # Clean tag format (lowercase, no accents/special characters)
           tags: ghcr.io/${{ github.actor }}/cloud-securise-frontend:${{ github.sha }}
