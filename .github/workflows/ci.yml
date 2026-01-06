@@ -1,4 +1,4 @@
-name: Full-Stack CI/CD with Docker, SonarQube, and SSH
+name: Full-Stack CI/CD with Docker and SonarQube
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+        fetch-depth: 0 
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -26,23 +26,30 @@ jobs:
         cache: maven
 
     - name: Build with Maven
+      # Ensures the build runs specifically for the backend module [cite: 9, 24]
       run: mvn -B -f Projet_Cloud_Securise/backend/pom.xml clean verify
 
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@master
+      with:
+        # Directs the scanner to the backend source code 
+        projectBaseDir: Projet_Cloud_Securise/backend
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        SONAR_PROJECT_KEY: ${{ github.repository }}
+        # Use your specific SonarCloud Organization key here
+        SONAR_ORGANIZATION: "guizaouiadam1234"
+        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+
     - name: Check SonarQube Quality Gate
       if: env.SONAR_HOST_URL != '' && env.SONAR_TOKEN != ''
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        SONAR_PROJECT_KEY: ${{ github.repository }}
+        SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
       run: |
         set -e
-        echo "Polling SonarQube for quality gate status (project: $SONAR_PROJECT_KEY)..."
+        echo "Polling SonarQube for quality gate status..."
         for i in $(seq 1 30); do
           status=$(curl -s -u $SONAR_TOKEN: "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" | python3 -c "import sys,json;print(json.load(sys.stdin)['projectStatus']['status'])") || true
           echo "SonarQube status: $status"
@@ -67,9 +74,12 @@ jobs:
     - name: Build and push backend Docker image
       uses: docker/build-push-action@v5
       with:
-        context: Projet_Cloud_Securise/backend
+        context: ./Projet_Cloud_Securise/backend
+        # Specifies the exact Dockerfile location to avoid "file not found" errors 
+        file: ./Projet_Cloud_Securise/backend/Dockerfile
         push: true
-        tags: ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+        # Clean tag format to avoid invalid reference errors caused by repository special characters
+        tags: ghcr.io/${{ github.actor }}/cloud-securise-backend:${{ github.sha }}
 
   build_frontend:
     runs-on: ubuntu-latest
@@ -87,15 +97,24 @@ jobs:
       - name: Install dependencies
         run: npm install
         working-directory: Projet_Cloud_Securise/frontend
+      
+      # Added CI=true to prevent npm test from hanging in the CI environment [cite: 9]
+      - name: Run tests
+        run: CI=true npm test
+        working-directory: Projet_Cloud_Securise/frontend
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push frontend Docker image
         uses: docker/build-push-action@v5
         with:
-          context: Projet_Cloud_Securise/frontend
+          context: ./Projet_Cloud_Securise/frontend
+          file: ./Projet_Cloud_Securise/frontend/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/frontend:${{ github.sha }}
+          # Clean tag format (lowercase, no accents/special characters)
+          tags: ghcr.io/${{ github.actor }}/cloud-securise-frontend:${{ github.sha }}
