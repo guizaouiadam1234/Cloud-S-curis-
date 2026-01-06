@@ -7,7 +7,7 @@ const statusEl = document.getElementById('status');
 const runsEl = document.getElementById('runs');
 
 let pollInterval = null;
-console.log(test);
+
 function setStatus(txt) { statusEl.textContent = txt }
 
 // When using the proxy, the token is kept server-side in the proxy's .env
