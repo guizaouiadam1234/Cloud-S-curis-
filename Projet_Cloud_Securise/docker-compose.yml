@@ -1,11 +1,4 @@
-version: '3.8'
 services:
-  backend:
-    build: ./backend
-    image: projet_cloud_securise_backend:latest
-    ports:
-      - "8080:8080"
-      - database
   database:
     image: postgres:13.4
     environment:
@@ -16,9 +9,21 @@ services:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
 
-volumes:
-  db_data:
-
-    environment:
-      - JAVA_OPTS=-Xms256m -Xmx512m
+  backend:
+    build: ./backend  # <-- TRÈS IMPORTANT : On utilise le dossier local, pas l'image distante
+    ports:
+      - "8080:8080"
+    depends_on:
+      - database
     restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data: # On définit le volume ici, sans 'restart' ni 'environment'
