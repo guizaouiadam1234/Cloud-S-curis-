@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CI/CD Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>CI/CD Dashboard</h1>
+  </header>
+
+  <section class="controls">
+    <label>Owner: <input id="owner" value="" placeholder="owner or org"/></label>
+    <label>Repo: <input id="repo" value="" placeholder="repository name"/></label>
+    <label>GitHub Token: <input id="token" type="password" placeholder="paste PAT (repo scope)"/></label>
+    <button id="start">Start</button>
+    <button id="stop" disabled>Stop</button>
+    <small class="hint">This dashboard uses your token in-browser — keep it private.</small>
+  </section>
+
+  <main>
+    <div id="status">Idle</div>
+    <div id="runs"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
