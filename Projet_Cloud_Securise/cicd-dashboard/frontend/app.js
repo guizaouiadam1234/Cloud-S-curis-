@@ -7,8 +7,50 @@ const statusEl = document.getElementById('status');
 const runsEl = document.getElementById('runs');
 
 let pollInterval = null;
+let workflowChart = null;
 
 function setStatus(txt) { statusEl.textContent = txt }
+
+function updateChart(successCount, failureCount) {
+  const ctx = document.getElementById('workflowChart').getContext('2d');
+  if (workflowChart) {
+    workflowChart.destroy();
+  }
+  workflowChart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: ['Succès', 'Échecs'],
+      datasets: [{
+        data: [successCount, failureCount],
+        backgroundColor: ['#4CAF50', '#F44336'],
+      }]
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          labels: {
+            color: 'white'
+          }
+        },
+        title: {
+          display: true,
+          text: 'Pourcentage de Succès et Échecs des Workflows',
+          color: 'white'
+        },
+        datalabels: {
+          color: 'white',
+          formatter: (value, ctx) => {
+            let sum = 0;
+            ctx.dataset.data.forEach(d => sum += d);
+            return sum > 0 ? ((value / sum) * 100).toFixed(1) + '%' : '';
+          }
+        }
+      }
+    }
+  });
+}
 
 // When using the proxy, the token is kept server-side in the proxy's .env
 async function fetchRuns(owner, repo) {
@@ -26,14 +68,21 @@ async function fetchJobs(owner, repo, run_id) {
 }
 
 function renderRuns(data, owner, repo, token) {
-  runsEl.innerHTML = '';
+  runsEl.innerHTML = '<div id="chart-container"><canvas id="workflowChart"></canvas></div>';
   const runs = data.workflow_runs || [];
   if (runs.length === 0) {
-    runsEl.innerHTML = '<div class="empty">No recent runs</div>';
+    updateChart(0, 0);
     return;
   }
 
+  let successCount = 0;
+  let failureCount = 0;
+
   runs.forEach(run => {
+    if (run.conclusion === 'success') successCount++;
+    else if (run.conclusion === 'failure') failureCount++;
+    // You can add more conclusions if needed
+
     const container = document.createElement('div');
     container.className = 'run';
     const header = document.createElement('div');
@@ -66,6 +115,8 @@ function renderRuns(data, owner, repo, token) {
         jobsContainer.textContent = 'Failed to load jobs: ' + err.message;
       });
   });
+
+  updateChart(successCount, failureCount);
 }
 
 async function poll() {
