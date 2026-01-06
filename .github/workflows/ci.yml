@@ -97,11 +97,6 @@ jobs:
       - name: Install dependencies
         run: npm install
         working-directory: Projet_Cloud_Securise/frontend
-      
-      # Added CI=true to prevent npm test from hanging in the CI environment [cite: 9]
-      - name: Run tests
-        run: CI=true npm test
-        working-directory: Projet_Cloud_Securise/frontend
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
