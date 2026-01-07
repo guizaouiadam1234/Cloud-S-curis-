@@ -50,8 +50,10 @@ jobs:
         context: ./Projet_Cloud_Securise/backend
         file: ./Projet_Cloud_Securise/backend/Dockerfile
         push: true
-        # Clean naming for Docker to avoid reference errors [cite: 25]
-        tags: ghcr.io/${{ github.actor }}/cloud-securise-backend:${{ github.sha }}
+        # Hardcoded lowercase owner to prevent build failures
+        tags: |
+          ghcr.io/guizaouiadam1234/cloud-securise-backend:${{ github.sha }}
+          ghcr.io/guizaouiadam1234/cloud-securise-backend:latest
 
   build_frontend:
     runs-on: ubuntu-latest
@@ -86,4 +88,7 @@ jobs:
           context: ./Projet_Cloud_Securise/frontend
           file: ./Projet_Cloud_Securise/frontend/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.actor }}/cloud-securise-frontend:${{ github.sha }}
+          # Hardcoded lowercase owner to prevent build failures
+          tags: |
+            ghcr.io/guizaouiadam1234/cloud-securise-frontend:${{ github.sha }}
+            ghcr.io/guizaouiadam1234/cloud-securise-frontend:latest
