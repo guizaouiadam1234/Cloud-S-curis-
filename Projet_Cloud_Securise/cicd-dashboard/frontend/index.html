@@ -11,19 +11,26 @@
 <body>
   <header>
     <h1>CI/CD Dashboard</h1>
+    <div id="user-info" style="position: absolute; top: 12px; right: 24px; display: flex; align-items: center;">
+      <img id="user-avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px;" />
+      <span id="user-username"></span>
+      <button id="logout-btn" style="margin-left: 10px; padding: 5px 10px;">Log out</button>
+    </div>
+    <div id="login-info" style="position: absolute; top: 12px; right: 24px; display: none;">
+      <button id="login-btn" style="padding: 5px 10px;">Log in</button>
+    </div>
   </header>
 
   <section class="controls">
-    <label>Owner: <input id="owner" value="" placeholder="owner or org"/></label>
+    <label style="margin-left: 13px;">Owner: <input id="owner" value="" placeholder="owner or org"/></label>
     <label>Repo: <input id="repo" value="" placeholder="repository name"/></label>
-    <label>GitHub Token: <input id="token" type="password" placeholder="paste PAT (repo scope)"/></label>
     <button id="start">Start</button>
     <button id="stop" disabled>Stop</button>
-    <small class="hint">This dashboard uses your token in-browser — keep it private.</small>
+    <small class="hint">Authenticated via GitHub OAuth2.</small>
   </section>
 
   <main>
-    <div id="status">Idle</div>
+    <div id="status"></div>
     <div id="runs">
       <div id="chart-container">
         <canvas id="workflowChart"></canvas>

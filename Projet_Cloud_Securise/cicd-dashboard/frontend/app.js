@@ -1,15 +1,47 @@
 const ownerEl = document.getElementById('owner');
 const repoEl = document.getElementById('repo');
-const tokenEl = document.getElementById('token');
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
 const statusEl = document.getElementById('status');
 const runsEl = document.getElementById('runs');
+const userAvatarEl = document.getElementById('user-avatar');
+const userUsernameEl = document.getElementById('user-username');
+const logoutBtn = document.getElementById('logout-btn');
+const userInfoEl = document.getElementById('user-info');
+const loginInfoEl = document.getElementById('login-info');
+const loginBtn = document.getElementById('login-btn');
 
 let pollInterval = null;
 let workflowChart = null;
 
 function setStatus(txt) { statusEl.textContent = txt }
+
+async function loadUserInfo() {
+  try {
+    const res = await fetch('/api/user');
+    if (res.status === 401) {
+      showLogin();
+      return;
+    }
+    const user = await res.json();
+    userAvatarEl.src = user.avatar;
+    userUsernameEl.textContent = user.username;
+    showUser();
+  } catch (err) {
+    console.error('Failed to load user info:', err);
+    showLogin();
+  }
+}
+
+function showUser() {
+  userInfoEl.style.display = 'flex';
+  loginInfoEl.style.display = 'none';
+}
+
+function showLogin() {
+  userInfoEl.style.display = 'none';
+  loginInfoEl.style.display = 'block';
+}
 
 function updateChart(successCount, failureCount) {
   const ctx = document.getElementById('workflowChart').getContext('2d');
@@ -19,7 +51,7 @@ function updateChart(successCount, failureCount) {
   workflowChart = new Chart(ctx, {
     type: 'pie',
     data: {
-      labels: ['Succès', 'Échecs'],
+      labels: ['Success', 'Failure'],
       datasets: [{
         data: [successCount, failureCount],
         backgroundColor: ['#4CAF50', '#F44336'],
@@ -36,7 +68,7 @@ function updateChart(successCount, failureCount) {
         },
         title: {
           display: true,
-          text: 'Pourcentage de Succès et Échecs des Workflows',
+          text: 'Successes and Failures percentage of Workflows',
           color: 'white'
         },
         datalabels: {
@@ -56,6 +88,13 @@ function updateChart(successCount, failureCount) {
 async function fetchRuns(owner, repo) {
   const url = `/api/runs?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
   const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+  if (res.status === 401) {
+    showLogin();
+    throw new Error('Unauthorized');
+  }
+  if (res.status === 404) {
+    throw new Error('Cannot find repo or owner');
+  }
   if (!res.ok) throw new Error(`Failed to fetch runs: ${res.status}`);
   return res.json();
 }
@@ -63,15 +102,20 @@ async function fetchRuns(owner, repo) {
 async function fetchJobs(owner, repo, run_id) {
   const url = `/api/jobs/${run_id}?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
   const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+  if (res.status === 401) {
+    showLogin();
+    throw new Error('Unauthorized');
+  }
   if (!res.ok) throw new Error(`Failed to fetch jobs: ${res.status}`);
   return res.json();
 }
 
-function renderRuns(data, owner, repo, token) {
+function renderRuns(data, owner, repo) {
   runsEl.innerHTML = '<div id="chart-container"><canvas id="workflowChart"></canvas></div>';
   const runs = data.workflow_runs || [];
   if (runs.length === 0) {
     updateChart(0, 0);
+    runsEl.innerHTML += '<div class="error">Aucun workflow récent trouvé. Vérifiez les permissions du token ou les paramètres.</div>';
     return;
   }
 
@@ -101,7 +145,7 @@ function renderRuns(data, owner, repo, token) {
     runsEl.appendChild(container);
 
     // fetch jobs
-    fetchJobs(owner, repo, run.id, token)
+    fetchJobs(owner, repo, run.id)
       .then(j => {
         jobsContainer.innerHTML = '';
         j.jobs.forEach(job => {
@@ -152,5 +196,21 @@ stopBtn.addEventListener('click', () => {
 
 // Nice small helper to prefill owner/repo if running inside this repo
 document.addEventListener('DOMContentLoaded', () => {
-  // nothing — user must fill in
+  loadUserInfo();
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      showLogin();
+      // Clear the dashboard
+      runsEl.innerHTML = '';
+      setStatus('Disconnected');
+      ownerEl.value = '';
+      repoEl.value = '';
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  });
+  loginBtn.addEventListener('click', () => {
+    window.location.href = '/auth/github';
+  });
 });
