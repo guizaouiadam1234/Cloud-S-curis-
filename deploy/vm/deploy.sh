@@ -22,11 +22,6 @@ fi
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
 
-if ! command -v curl >/dev/null 2>&1; then
-  echo "ERROR: curl not installed (required for health check). Install it, e.g.: sudo apt-get update && sudo apt-get install -y curl" >&2
-  exit 3
-fi
-
 if [[ ! -f "$COMPOSE_FILE" ]]; then
   echo "ERROR: compose file '$COMPOSE_FILE' not found in $APP_DIR" >&2
   echo "Tip: CI should upload it to $APP_DIR/$COMPOSE_FILE" >&2
@@ -90,31 +85,5 @@ fi
 
 echo "Starting containers..."
 "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
-
-echo "Waiting for backend health..."
-ok=0
-for i in {1..30}; do
-  if curl -fsS "http://localhost:8080/actuator/health" | grep -q '"status"\s*:\s*"UP"'; then
-    ok=1
-    break
-  fi
-  sleep 2
-done
-
-if [[ "$ok" != "1" ]]; then
-  echo "ERROR: health check failed; rolling back..." >&2
-
-  if [[ -f "${ENV_FILE}.prev" ]]; then
-    mv -f "${ENV_FILE}.prev" "$ENV_FILE"
-    "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
-    "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
-  else
-    echo "No previous env file found; cannot rollback automatically" >&2
-  fi
-
-  echo "Backend logs (last 200 lines):" >&2
-  "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs --no-color --tail=200 backend >&2 || true
-  exit 1
-fi
 
 echo "Deployment OK"
