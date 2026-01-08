@@ -79,16 +79,17 @@ if [[ -n "$legacy_ids" ]]; then
   done <<< "$legacy_ids"
 fi
 
-echo "Starting containers..."
-"${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
-
-# Fast fail if port is still taken (usually another container outside this stack)
-if docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep -qE '0\.0\.0\.0:8080->|\[::\]:8080->'; then
-  echo "ERROR: port 8080 is still in use after bringing stack down." >&2
+# Ensure port 8080 is free BEFORE starting (otherwise docker will fail to bind).
+port_8080_ids="$(docker ps -q --filter 'publish=8080')"
+if [[ -n "$port_8080_ids" ]]; then
+  echo "ERROR: port 8080 is already in use by another container; cannot deploy." >&2
   echo "Container(s) currently publishing 8080:" >&2
-  docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep -E '0\.0\.0\.0:8080->|\[::\]:8080->' >&2 || true
+  docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' --filter 'publish=8080' >&2 || true
   exit 5
 fi
+
+echo "Starting containers..."
+"${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
 
 echo "Waiting for backend health..."
 ok=0
