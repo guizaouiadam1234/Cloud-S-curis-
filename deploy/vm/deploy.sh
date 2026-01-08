@@ -65,6 +65,20 @@ echo "Pulling images..."
 echo "Stopping previous stack (to free ports)..."
 "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans || true
 
+LEGACY_COMPOSE_PROJECT="${LEGACY_COMPOSE_PROJECT:-projet_cloud_securise}"
+
+# If a previous (legacy) compose project is still running (e.g. projet_cloud_securise),
+# it can keep ports allocated even after bringing THIS stack down.
+legacy_ids="$(docker ps -q --filter "label=com.docker.compose.project=${LEGACY_COMPOSE_PROJECT}")"
+if [[ -n "$legacy_ids" ]]; then
+  echo "Legacy compose project '${LEGACY_COMPOSE_PROJECT}' still running; stopping/removing its containers..."
+  docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' --filter "label=com.docker.compose.project=${LEGACY_COMPOSE_PROJECT}" || true
+  while read -r id; do
+    [[ -z "$id" ]] && continue
+    docker rm -f "$id" >/dev/null || true
+  done <<< "$legacy_ids"
+fi
+
 echo "Starting containers..."
 "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
 
