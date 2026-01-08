@@ -99,7 +99,7 @@ jobs:
 
   deploy_vm:
     name: Deploy to VM (Docker Compose)
-    runs-on: [self-hosted, Linux, X64, kali-vm]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       packages: read
