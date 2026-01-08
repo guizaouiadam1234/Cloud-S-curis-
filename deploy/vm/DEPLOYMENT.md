@@ -64,7 +64,7 @@ In your GitHub repo settings → **Settings → Secrets and variables → Action
 
 - `VM_HOST`: VM public IP / hostname
 - `VM_USER`: SSH user (e.g. `deployer`)
-- `VM_SSH_KEY`: **private key** content for that user (PEM/OpenSSH format)
+- `SSH_PRIVATE_KEY`: **private key** content for that user (PEM/OpenSSH format)
 - `GHCR_USER`: GitHub username that owns the PAT used by the VM
 - `GHCR_TOKEN`: PAT with `read:packages`
 - `SONAR_TOKEN` (optional): required only if you want SonarCloud analysis to run

@@ -99,7 +99,10 @@ jobs:
 
   deploy_vm:
     name: Deploy to VM (Docker Compose)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, kali-vm]
+    permissions:
+      contents: read
+      packages: read
     needs: [build_backend, build_frontend]
     if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
     steps:
@@ -108,9 +111,9 @@ jobs:
       - name: Upload compose + deploy script to VM
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.VM_HOST }}
+          host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: |
             Projet_Cloud_Securise/docker-compose.prod.yml
             deploy/vm/deploy.sh
@@ -124,12 +127,12 @@ jobs:
           ENV_FILE: .env
           BACKEND_IMAGE_TAG: ${{ github.sha }}
           FRONTEND_IMAGE_TAG: ${{ github.sha }}
-          GHCR_USER: ${{ secrets.GHCR_USER }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          host: ${{ secrets.VM_HOST }}
+          host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: APP_DIR,COMPOSE_FILE,ENV_FILE,BACKEND_IMAGE_TAG,FRONTEND_IMAGE_TAG,GHCR_USER,GHCR_TOKEN
           script: |
             set -euo pipefail
