@@ -235,8 +235,9 @@ startBtn.addEventListener('click', () => {
   fetchAccess(owner, repo)
     .then(a => {
       repoDefaultBranch = a.default_branch || null;
-      setRole(`Role: ${a.role || 'unknown'}${repoDefaultBranch ? ` • default: ${repoDefaultBranch}` : ''}`);
-      const canDeploy = a.role === 'admin' || a.role === 'deployer';
+      const canDeploy = !!a.can_deploy;
+      const reason = a.deploy_reason ? ` • ${a.deploy_reason}` : '';
+      setRole(`Role: ${a.role || 'unknown'}${repoDefaultBranch ? ` • default: ${repoDefaultBranch}` : ''}${canDeploy ? '' : reason}`);
       deployBtn.disabled = !canDeploy;
       poll();
       pollInterval = setInterval(poll, 15000);
@@ -276,10 +277,13 @@ deployBtn.addEventListener('click', async () => {
   } catch (err) {
     setStatus('Error: ' + err.message);
   } finally {
-    // Re-enable based on role
-    const roleTxt = roleEl.textContent || '';
-    const canDeploy = roleTxt.includes('admin') || roleTxt.includes('deployer');
-    deployBtn.disabled = !canDeploy;
+    // Re-enable based on latest server-side access decision
+    try {
+      const a = await fetchAccess(owner, repo);
+      deployBtn.disabled = !a.can_deploy;
+    } catch {
+      deployBtn.disabled = true;
+    }
   }
 });
 

@@ -9,6 +9,23 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+function parseCsvList(v) {
+  if (!v) return [];
+  return String(v)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+// Optional allowlist for who can trigger deployments from the dashboard.
+// Example: DEPLOY_ALLOW_USERS="guizaouiadam1234"
+const DEPLOY_ALLOW_USERS = parseCsvList(process.env.DEPLOY_ALLOW_USERS);
+
+function isDeployAllowedForUser(githubUsername) {
+  if (DEPLOY_ALLOW_USERS.length === 0) return true; // no restriction configured
+  return DEPLOY_ALLOW_USERS.includes(String(githubUsername || '').trim());
+}
+
 passport.serializeUser((user, done) => {
   done(null, user);
 });
@@ -169,10 +186,20 @@ app.get('/api/access', async (req, res) => {
   try {
     const repoInfo = await fetchRepo(owner, repo, req.user.accessToken);
     const role = roleFromPermissions(repoInfo.permissions);
+
+    const hasRepoDeployRight = role === 'admin' || role === 'deployer';
+    const isAllowedUser = isDeployAllowedForUser(req.user.username);
+    const can_deploy = hasRepoDeployRight && isAllowedUser;
+    let deploy_reason = null;
+    if (!hasRepoDeployRight) deploy_reason = 'Requires push/admin on the repository';
+    else if (!isAllowedUser) deploy_reason = 'Not allowlisted to deploy';
+
     res.json({
       owner,
       repo,
       role,
+      can_deploy,
+      deploy_reason,
       permissions: repoInfo.permissions || null,
       default_branch: repoInfo.default_branch || null
     });
@@ -186,6 +213,10 @@ app.post('/api/dispatch', async (req, res) => {
   if (!owner || !repo) return res.status(400).json({ error: 'owner & repo required' });
 
   try {
+    if (!isDeployAllowedForUser(req.user.username)) {
+      return res.status(403).json({ error: 'Forbidden: you are not allowlisted to deploy' });
+    }
+
     const repoInfo = await fetchRepo(owner, repo, req.user.accessToken);
     const role = roleFromPermissions(repoInfo.permissions);
     if (!(role === 'admin' || role === 'deployer')) {
