@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 APP_DIR="${APP_DIR:-/opt/cloud-securise}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
@@ -43,11 +43,43 @@ else
   exit 3
 fi
 
+rollback_in_progress=0
+
+rollback() {
+  if [[ "$rollback_in_progress" == "1" ]]; then
+    return 0
+  fi
+  rollback_in_progress=1
+
+  if [[ ! -f "${ENV_FILE}.prev" ]]; then
+    echo "No previous env file found; cannot rollback automatically" >&2
+    return 0
+  fi
+
+  echo "Rolling back to previous deployment..." >&2
+  cp -f "${ENV_FILE}.prev" "$ENV_FILE" || true
+  "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull || true
+  "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans || true
+  "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans || true
+}
+
+on_error() {
+  local exit_code=$?
+  local line_no=${1:-?}
+  echo "ERROR: deployment failed (exit=${exit_code}) at line ${line_no}" >&2
+  rollback
+  exit "$exit_code"
+}
+
 echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
 
 if [[ -f "$ENV_FILE" ]]; then
   cp -f "$ENV_FILE" "${ENV_FILE}.prev"
 fi
+
+# From this point onward, if anything fails we restore the previous .env and
+# attempt to bring the previous images back up.
+trap 'on_error $LINENO' ERR
 
 cat > "$ENV_FILE" <<EOF
 BACKEND_IMAGE_TAG=${BACKEND_IMAGE_TAG}
