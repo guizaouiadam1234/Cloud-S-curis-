@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.imt.framework.web.tuto.TutoApplicationTests" time="2.489" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.imt.framework.web.tuto.repositories.LivreRepositoryTest" time="5.519" tests="1" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="25"/>
     <property name="sun.cpu.isalist" value="amd64"/>
@@ -47,7 +47,6 @@
     <property name="localRepository" value="C:\Users\illum\.m2\repository"/>
     <property name="java.vendor.url.bug" value="https://bugreport.java.com/bugreport/"/>
     <property name="java.io.tmpdir" value="C:\Users\illum\AppData\Local\Temp\"/>
-    <property name="com.zaxxer.hikari.pool_number" value="1"/>
     <property name="java.version" value="25.0.1"/>
     <property name="user.dir" value="C:\Users\illum\Desktop\Projects\Cloud Sécurisé\Projet_Cloud_Securise\backend"/>
     <property name="os.arch" value="amd64"/>
@@ -65,9 +64,9 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="69.0"/>
   </properties>
-  <testcase name="contextLoads" classname="com.imt.framework.web.tuto.TutoApplicationTests" time="0.011">
-    <system-out><![CDATA[2026-01-08T19:38:14.965+01:00  INFO 8528 --- [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.imt.framework.web.tuto.TutoApplicationTests]: TutoApplicationTests does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-2026-01-08T19:38:14.981+01:00  INFO 8528 --- [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.imt.framework.web.tuto.TutoApplication for test class com.imt.framework.web.tuto.TutoApplicationTests
+  <testcase name="getBooksWithMaxPrice_filtersByPriceInclusive" classname="com.imt.framework.web.tuto.repositories.LivreRepositoryTest" time="0.3">
+    <system-out><![CDATA[19:38:09.539 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.imt.framework.web.tuto.repositories.LivreRepositoryTest]: LivreRepositoryTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+19:38:09.737 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.imt.framework.web.tuto.TutoApplication for test class com.imt.framework.web.tuto.repositories.LivreRepositoryTest
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -77,22 +76,32 @@
  =========|_|==============|___/=/_/_/_/
  :: Spring Boot ::                (v3.1.3)
 
-2026-01-08T19:38:15.071+01:00  INFO 8528 --- [           main] c.i.f.web.tuto.TutoApplicationTests      : Starting TutoApplicationTests using Java 25.0.1 with PID 8528 (started by illum in C:\Users\illum\Desktop\Projects\Cloud Sécurisé\Projet_Cloud_Securise\backend)
-2026-01-08T19:38:15.071+01:00  INFO 8528 --- [           main] c.i.f.web.tuto.TutoApplicationTests      : No active profile set, falling back to 1 default profile: "default"
-2026-01-08T19:38:15.841+01:00  INFO 8528 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-01-08T19:38:15.861+01:00  INFO 8528 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 19 ms. Found 1 JPA repository interfaces.
-2026-01-08T19:38:16.173+01:00  INFO 8528 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-01-08T19:38:16.187+01:00  INFO 8528 --- [           main] o.h.b.i.BytecodeProviderInitiator        : HHH000021: Bytecode provider name : bytebuddy
-2026-01-08T19:38:16.188+01:00  INFO 8528 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-01-08T19:38:16.191+01:00  INFO 8528 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-01-08T19:38:16.237+01:00  INFO 8528 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn6: url=jdbc:h2:mem:testdb user=SA
-2026-01-08T19:38:16.241+01:00  INFO 8528 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-01-08T19:38:16.288+01:00  INFO 8528 --- [           main] o.h.b.i.BytecodeProviderInitiator        : HHH000021: Bytecode provider name : bytebuddy
-2026-01-08T19:38:16.330+01:00  INFO 8528 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000490: Using JtaPlatform implementation: [org.hibernate.engine.transaction.jta.platform.internal.NoJtaPlatform]
-2026-01-08T19:38:16.337+01:00  INFO 8528 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-01-08T19:38:16.754+01:00  INFO 8528 --- [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 1 endpoint(s) beneath base path '/actuator'
-2026-01-08T19:38:17.238+01:00  INFO 8528 --- [           main] c.i.f.web.tuto.TutoApplicationTests      : Started TutoApplicationTests in 2.236 seconds (process running for 10.349)
-DataInitializer: seeded 3 livres
+2026-01-08T19:38:10.398+01:00  INFO 8528 --- [           main] c.i.f.w.t.r.LivreRepositoryTest          : Starting LivreRepositoryTest using Java 25.0.1 with PID 8528 (started by illum in C:\Users\illum\Desktop\Projects\Cloud Sécurisé\Projet_Cloud_Securise\backend)
+2026-01-08T19:38:10.399+01:00  INFO 8528 --- [           main] c.i.f.w.t.r.LivreRepositoryTest          : No active profile set, falling back to 1 default profile: "default"
+2026-01-08T19:38:10.962+01:00  INFO 8528 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-01-08T19:38:11.057+01:00  INFO 8528 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 80 ms. Found 1 JPA repository interfaces.
+2026-01-08T19:38:11.138+01:00  INFO 8528 --- [           main] beddedDataSourceBeanFactoryPostProcessor : Replacing 'dataSource' DataSource bean with embedded version
+2026-01-08T19:38:11.383+01:00  INFO 8528 --- [           main] o.s.j.d.e.EmbeddedDatabaseFactory        : Starting embedded database: url='jdbc:h2:mem:aeaf7439-e64a-4b08-974b-de704263d45f;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false', username='sa'
+2026-01-08T19:38:11.900+01:00  INFO 8528 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-01-08T19:38:12.009+01:00  INFO 8528 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.2.7.Final
+2026-01-08T19:38:12.012+01:00  INFO 8528 --- [           main] org.hibernate.cfg.Environment            : HHH000406: Using bytecode reflection optimizer
+2026-01-08T19:38:12.279+01:00  INFO 8528 --- [           main] o.h.b.i.BytecodeProviderInitiator        : HHH000021: Bytecode provider name : bytebuddy
+2026-01-08T19:38:12.297+01:00  INFO 8528 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-01-08T19:38:12.681+01:00  INFO 8528 --- [           main] o.h.b.i.BytecodeProviderInitiator        : HHH000021: Bytecode provider name : bytebuddy
+2026-01-08T19:38:13.405+01:00  INFO 8528 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000490: Using JtaPlatform implementation: [org.hibernate.engine.transaction.jta.platform.internal.NoJtaPlatform]
+Hibernate: drop table if exists livre cascade 
+Hibernate: drop sequence if exists livre_seq
+Hibernate: create sequence livre_seq start with 1 increment by 50
+Hibernate: create table livre (id integer not null, price float(53), auteur varchar(255), titre varchar(255), primary key (id))
+2026-01-08T19:38:13.448+01:00  INFO 8528 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-01-08T19:38:13.835+01:00  INFO 8528 --- [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-01-08T19:38:14.449+01:00  INFO 8528 --- [           main] c.i.f.w.t.r.LivreRepositoryTest          : Started LivreRepositoryTest in 4.569 seconds (process running for 7.561)
+Hibernate: select next value for livre_seq
+Hibernate: select next value for livre_seq
+Hibernate: insert into livre (auteur,price,titre,id) values (?,?,?,?)
+Hibernate: insert into livre (auteur,price,titre,id) values (?,?,?,?)
+Hibernate: insert into livre (auteur,price,titre,id) values (?,?,?,?)
+Hibernate: select l1_0.id,l1_0.auteur,l1_0.price,l1_0.titre from livre l1_0 where l1_0.price<=?
 ]]></system-out>
   </testcase>
 </testsuite>

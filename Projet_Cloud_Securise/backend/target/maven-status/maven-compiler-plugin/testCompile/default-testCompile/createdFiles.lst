@@ -1,1 +1,4 @@
+com\imt\framework\web\tuto\repositories\LivreRepositoryTest.class
 com\imt\framework\web\tuto\TutoApplicationTests.class
+com\imt\framework\web\tuto\DataInitializerUnitTest.class
+com\imt\framework\web\tuto\resources\LivreResourceUnitTest.class

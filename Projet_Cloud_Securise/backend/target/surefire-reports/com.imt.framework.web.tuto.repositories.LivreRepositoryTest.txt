@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.imt.framework.web.tuto.repositories.LivreRepositoryTest
+-------------------------------------------------------------------------------
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.519 s - in com.imt.framework.web.tuto.repositories.LivreRepositoryTest
