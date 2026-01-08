@@ -148,13 +148,12 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/id_rsa "$VM_USER@$VM_IP" \
             "set -euo pipefail; \
-             APP_DIR=/opt/cloud-securise; \
-             chmod +x \"$APP_DIR/deploy.sh\"; \
-             APP_DIR=\"$APP_DIR\" \
+             chmod +x /opt/cloud-securise/deploy.sh; \
+             APP_DIR=/opt/cloud-securise \
              COMPOSE_FILE=docker-compose.prod.yml \
              ENV_FILE=.env \
              BACKEND_IMAGE_TAG='${BACKEND_IMAGE_TAG}' \
              FRONTEND_IMAGE_TAG='${FRONTEND_IMAGE_TAG}' \
              GHCR_USER='${GHCR_USER}' \
              GHCR_TOKEN='${GHCR_TOKEN}' \
-             \"$APP_DIR/deploy.sh\""
+             /opt/cloud-securise/deploy.sh"
