@@ -2,6 +2,8 @@ const ownerEl = document.getElementById('owner');
 const repoEl = document.getElementById('repo');
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
+const deployBtn = document.getElementById('deploy');
+const roleEl = document.getElementById('role');
 const statusEl = document.getElementById('status');
 const runsEl = document.getElementById('runs');
 const userAvatarEl = document.getElementById('user-avatar');
@@ -13,8 +15,45 @@ const loginBtn = document.getElementById('login-btn');
 
 let pollInterval = null;
 let workflowChart = null;
+let repoDefaultBranch = null;
 
 function setStatus(txt) { statusEl.textContent = txt }
+
+function setRole(roleText) {
+  roleEl.textContent = roleText || '';
+}
+
+async function fetchAccess(owner, repo) {
+  const url = `/api/access?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
+  const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+  if (res.status === 401) {
+    showLogin();
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) throw new Error(`Failed to fetch access: ${res.status}`);
+  return res.json();
+}
+
+async function dispatchWorkflow(owner, repo, ref) {
+  const res = await fetch('/api/dispatch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' },
+    body: JSON.stringify({ owner, repo, ref })
+  });
+  if (res.status === 401) {
+    showLogin();
+    throw new Error('Unauthorized');
+  }
+  if (res.status === 403) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Forbidden');
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Dispatch failed: ${res.status}`);
+  }
+  return res.json().catch(() => ({}));
+}
 
 async function loadUserInfo() {
   try {
@@ -183,8 +222,32 @@ async function poll() {
 startBtn.addEventListener('click', () => {
   startBtn.disabled = true;
   stopBtn.disabled = false;
-  poll();
-  pollInterval = setInterval(poll, 15000);
+  const owner = ownerEl.value.trim();
+  const repo = repoEl.value.trim();
+  if (!owner || !repo) {
+    setStatus('Provide owner and repo');
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    return;
+  }
+
+  setStatus('Checking access...');
+  fetchAccess(owner, repo)
+    .then(a => {
+      repoDefaultBranch = a.default_branch || null;
+      setRole(`Role: ${a.role || 'unknown'}${repoDefaultBranch ? ` • default: ${repoDefaultBranch}` : ''}`);
+      const canDeploy = a.role === 'admin' || a.role === 'deployer';
+      deployBtn.disabled = !canDeploy;
+      poll();
+      pollInterval = setInterval(poll, 15000);
+    })
+    .catch(err => {
+      setRole('');
+      deployBtn.disabled = true;
+      setStatus('Error: ' + err.message);
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    });
 });
 
 stopBtn.addEventListener('click', () => {
@@ -192,6 +255,32 @@ stopBtn.addEventListener('click', () => {
   stopBtn.disabled = true;
   if (pollInterval) clearInterval(pollInterval);
   setStatus('Stopped');
+});
+
+deployBtn.addEventListener('click', async () => {
+  const owner = ownerEl.value.trim();
+  const repo = repoEl.value.trim();
+  if (!owner || !repo) {
+    setStatus('Provide owner and repo');
+    return;
+  }
+  const ref = repoDefaultBranch || 'main';
+
+  deployBtn.disabled = true;
+  setStatus(`Dispatching workflow on ${ref}...`);
+  try {
+    await dispatchWorkflow(owner, repo, ref);
+    setStatus(`Dispatch sent (${new Date().toLocaleTimeString()}). Refreshing...`);
+    // Give GitHub a moment to create the new run
+    setTimeout(() => poll(), 2000);
+  } catch (err) {
+    setStatus('Error: ' + err.message);
+  } finally {
+    // Re-enable based on role
+    const roleTxt = roleEl.textContent || '';
+    const canDeploy = roleTxt.includes('admin') || roleTxt.includes('deployer');
+    deployBtn.disabled = !canDeploy;
+  }
 });
 
 // Nice small helper to prefill owner/repo if running inside this repo
@@ -206,6 +295,9 @@ document.addEventListener('DOMContentLoaded', () => {
       setStatus('Disconnected');
       ownerEl.value = '';
       repoEl.value = '';
+      setRole('');
+      deployBtn.disabled = true;
+      repoDefaultBranch = null;
     } catch (err) {
       console.error('Logout failed:', err);
     }

@@ -54,7 +54,7 @@ app.get('/auth/github', (req, res, next) => {
   if (!req.session.clientId || !req.session.clientSecret) {
     return res.redirect('/login');
   }
-  passport.authenticate('github', { scope: ['repo'] })(req, res, next);
+  passport.authenticate('github', { scope: ['repo', 'workflow'] })(req, res, next);
 });
 
 app.get('/auth/github/dashboard', 
@@ -133,6 +133,87 @@ app.get('/api/runs', async (req, res) => {
     });
     const data = await r.json();
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function fetchRepo(owner, repo, token) {
+  const r = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `token ${token}`
+    }
+  });
+  if (r.status === 404) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(data.message || 'Repository not found');
+  }
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(data.message || `GitHub API error (${r.status})`);
+  }
+  return r.json();
+}
+
+function roleFromPermissions(permissions) {
+  if (!permissions) return 'viewer';
+  if (permissions.admin) return 'admin';
+  if (permissions.push) return 'deployer';
+  return 'viewer';
+}
+
+app.get('/api/access', async (req, res) => {
+  const { owner, repo } = req.query;
+  if (!owner || !repo) return res.status(400).json({ error: 'owner & repo required' });
+  try {
+    const repoInfo = await fetchRepo(owner, repo, req.user.accessToken);
+    const role = roleFromPermissions(repoInfo.permissions);
+    res.json({
+      owner,
+      repo,
+      role,
+      permissions: repoInfo.permissions || null,
+      default_branch: repoInfo.default_branch || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/dispatch', async (req, res) => {
+  const { owner, repo, ref } = req.body || {};
+  if (!owner || !repo) return res.status(400).json({ error: 'owner & repo required' });
+
+  try {
+    const repoInfo = await fetchRepo(owner, repo, req.user.accessToken);
+    const role = roleFromPermissions(repoInfo.permissions);
+    if (!(role === 'admin' || role === 'deployer')) {
+      return res.status(403).json({ error: 'Forbidden: requires push/admin on the repository' });
+    }
+
+    const dispatchRef = (ref && String(ref).trim()) || repoInfo.default_branch || 'main';
+    const workflowFile = process.env.WORKFLOW_FILE || 'ci.yml';
+
+    const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        Authorization: `token ${req.user.accessToken}`
+      },
+      body: JSON.stringify({ ref: dispatchRef })
+    });
+
+    if (r.status === 204) {
+      return res.json({ ok: true, ref: dispatchRef, workflow: workflowFile });
+    }
+
+    const data = await r.json().catch(() => ({}));
+    return res.status(r.status).json({
+      error: data.message || `Dispatch failed (${r.status})`,
+      details: data
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
