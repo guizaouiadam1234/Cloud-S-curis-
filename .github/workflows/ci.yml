@@ -108,44 +108,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Upload compose + deploy script to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_IP }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: |
-            Projet_Cloud_Securise/docker-compose.prod.yml
-            deploy/vm/deploy.sh
-          target: /tmp/cloud-securise-upload
-
-      - name: Run deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Configure SSH
+        shell: bash
         env:
-          APP_DIR: /opt/cloud-securise
-          COMPOSE_FILE: docker-compose.prod.yml
-          ENV_FILE: .env
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VM_IP: ${{ secrets.VM_IP }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$VM_IP" >> ~/.ssh/known_hosts
+
+      - name: Upload compose + deploy script (scp)
+        shell: bash
+        env:
+          VM_IP: ${{ secrets.VM_IP }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_rsa "$VM_USER@$VM_IP" "mkdir -p /opt/cloud-securise"
+          scp -i ~/.ssh/id_rsa \
+            Projet_Cloud_Securise/docker-compose.prod.yml \
+            "$VM_USER@$VM_IP:/opt/cloud-securise/docker-compose.prod.yml"
+          scp -i ~/.ssh/id_rsa \
+            deploy/vm/deploy.sh \
+            "$VM_USER@$VM_IP:/opt/cloud-securise/deploy.sh"
+
+      - name: Deploy (ssh)
+        shell: bash
+        env:
+          VM_IP: ${{ secrets.VM_IP }}
+          VM_USER: ${{ secrets.VM_USER }}
           BACKEND_IMAGE_TAG: ${{ github.sha }}
           FRONTEND_IMAGE_TAG: ${{ github.sha }}
-          GHCR_USER: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          host: ${{ secrets.VM_IP }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: APP_DIR,COMPOSE_FILE,ENV_FILE,BACKEND_IMAGE_TAG,FRONTEND_IMAGE_TAG,GHCR_USER,GHCR_TOKEN
-          script: |
-            set -euo pipefail
-            mkdir -p "$APP_DIR"
-
-            # Normalize uploaded files into $APP_DIR root
-            if [ -f "/tmp/cloud-securise-upload/Projet_Cloud_Securise/docker-compose.prod.yml" ]; then
-              mv -f "/tmp/cloud-securise-upload/Projet_Cloud_Securise/docker-compose.prod.yml" "$APP_DIR/docker-compose.prod.yml"
-            fi
-            if [ -f "/tmp/cloud-securise-upload/deploy/vm/deploy.sh" ]; then
-              mv -f "/tmp/cloud-securise-upload/deploy/vm/deploy.sh" "$APP_DIR/deploy.sh"
-            fi
-            rm -rf /tmp/cloud-securise-upload || true
-
-            chmod +x "$APP_DIR/deploy.sh"
-            "$APP_DIR/deploy.sh"
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_rsa "$VM_USER@$VM_IP" \
+            "set -euo pipefail; \
+             APP_DIR=/opt/cloud-securise; \
+             chmod +x \"$APP_DIR/deploy.sh\"; \
+             APP_DIR=\"$APP_DIR\" \
+             COMPOSE_FILE=docker-compose.prod.yml \
+             ENV_FILE=.env \
+             BACKEND_IMAGE_TAG='${BACKEND_IMAGE_TAG}' \
+             FRONTEND_IMAGE_TAG='${FRONTEND_IMAGE_TAG}' \
+             GHCR_USER='${GHCR_USER}' \
+             GHCR_TOKEN='${GHCR_TOKEN}' \
+             \"$APP_DIR/deploy.sh\""
