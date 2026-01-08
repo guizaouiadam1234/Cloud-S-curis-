@@ -1,3 +1,5 @@
+name: cloud-securise
+
 services:
   backend:
     image: ghcr.io/guizaouiadam1234/cloud-securise-backend:${BACKEND_IMAGE_TAG}

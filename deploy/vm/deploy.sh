@@ -62,8 +62,19 @@ EOF
 echo "Pulling images..."
 "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 
+echo "Stopping previous stack (to free ports)..."
+"${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans || true
+
 echo "Starting containers..."
 "${DOCKER_COMPOSE[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans
+
+# Fast fail if port is still taken (usually another container outside this stack)
+if docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep -qE '0\.0\.0\.0:8080->|\[::\]:8080->'; then
+  echo "ERROR: port 8080 is still in use after bringing stack down." >&2
+  echo "Container(s) currently publishing 8080:" >&2
+  docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep -E '0\.0\.0\.0:8080->|\[::\]:8080->' >&2 || true
+  exit 5
+fi
 
 echo "Waiting for backend health..."
 ok=0
