@@ -400,7 +400,14 @@ async function unzipTextLogs(zipArrayBuffer) {
 
 function renderRuns(data, owner, repo) {
   runsEl.innerHTML = '<div id="chart-container"><canvas id="workflowChart"></canvas></div>';
-  const runs = data.workflow_runs || [];
+  const runs = (data.workflow_runs || []).slice().sort((a, b) => {
+    const ta = Date.parse(a.created_at || a.run_started_at || '') || 0;
+    const tb = Date.parse(b.created_at || b.run_started_at || '') || 0;
+    if (tb !== ta) return tb - ta;
+    const na = Number(a.run_number) || 0;
+    const nb = Number(b.run_number) || 0;
+    return nb - na;
+  });
   if (runs.length === 0) {
     updateChart(0, 0);
     runsEl.innerHTML += '<div class="error">Aucun workflow récent trouvé. Vérifiez les permissions du token ou les paramètres.</div>';

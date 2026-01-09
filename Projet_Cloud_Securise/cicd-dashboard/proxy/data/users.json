@@ -3,13 +3,22 @@
     "guizaouiadam1234": {
       "username": "guizaouiadam1234",
       "avatar": "https://avatars.githubusercontent.com/u/53662765?v=4",
-      "lastSeenAt": "2026-01-09T08:58:06.836Z",
+      "lastSeenAt": "2026-01-09T10:11:33.815Z",
       "deployAllowed": true
     },
     "Kameoc": {
       "username": "Kameoc",
       "avatar": "https://avatars.githubusercontent.com/u/116305023?v=4",
+<<<<<<< HEAD
       "lastSeenAt": "2026-01-09T10:15:01.252Z"
+=======
+      "lastSeenAt": "2026-01-09T09:34:48.992Z"
+    },
+    "ihavenoideawhattoputin": {
+      "username": "ihavenoideawhattoputin",
+      "avatar": "https://avatars.githubusercontent.com/u/146485541?v=4",
+      "lastSeenAt": "2026-01-09T10:04:41.493Z"
+>>>>>>> 7ed49dcdc61ca0c86574fd25a985f1d560b398e6
     }
   }
 }
