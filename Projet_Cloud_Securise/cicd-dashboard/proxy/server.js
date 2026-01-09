@@ -548,13 +548,13 @@ app.get('/login', (req, res) => {
       </head>
       <body>
         <h1>CI/CD Dashboard</h1>
-        <p>Entrez vos credentials GitHub OAuth pour vous connecter.</p>
+        <p>Enter your GitHub OAuth credentials to log in.</p>
         <form action="/auth/setup" method="post">
           <label for="clientId">Client ID:</label>
           <input type="text" id="clientId" name="clientId" required>
           <label for="clientSecret">Client Secret:</label>
           <input type="password" id="clientSecret" name="clientSecret" required>
-          <button type="submit">Connexion</button>
+          <button type="submit">Log in</button>
         </form>
       </body>
     </html>

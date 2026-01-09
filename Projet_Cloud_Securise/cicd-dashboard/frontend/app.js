@@ -229,7 +229,7 @@ function updateChart(successCount, failureCount) {
         },
         title: {
           display: true,
-          text: 'Successes and Failures percentage of Workflows',
+          text: 'Successes and Failures percentage of Pipelines',
           color: 'white'
         },
         datalabels: {
@@ -410,7 +410,7 @@ function renderRuns(data, owner, repo) {
   });
   if (runs.length === 0) {
     updateChart(0, 0);
-    runsEl.innerHTML += '<div class="error">Aucun workflow récent trouvé. Vérifiez les permissions du token ou les paramètres.</div>';
+    runsEl.innerHTML += '<div class="error">Aucun pipeline récent trouvé. Vérifiez les permissions du token ou les paramètres.</div>';
     return;
   }
 
@@ -542,7 +542,7 @@ deployBtn.addEventListener('click', async () => {
   const ref = repoDefaultBranch || 'main';
 
   deployBtn.disabled = true;
-  setStatus(`Dispatching workflow on ${ref}...`);
+  setStatus(`Dispatching pipeline on ${ref}...`);
   try {
     await dispatchWorkflow(owner, repo, ref);
     setStatus(`Dispatch sent (${new Date().toLocaleTimeString()}). Refreshing...`);
