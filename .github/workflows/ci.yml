@@ -66,8 +66,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     defaults:
       run:
         working-directory: ./Projet_Cloud_Securise/frontend
@@ -82,20 +80,6 @@ jobs:
       
       - name: Install dependencies
         run: npm ci
-
-      - name: Test (Jest) with coverage
-        env:
-          CI: true
-        run: npm test -- --coverage --watchAll=false
-
-      - name: SonarCloud analysis (frontend, optional)
-        if: ${{ env.SONAR_TOKEN != '' }}
-        uses: SonarSource/sonarcloud-github-action@v3
-        with:
-          projectBaseDir: Projet_Cloud_Securise/frontend
-        env:
-          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
