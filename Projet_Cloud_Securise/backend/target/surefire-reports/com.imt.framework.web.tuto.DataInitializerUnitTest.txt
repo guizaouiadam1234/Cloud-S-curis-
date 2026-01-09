@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.imt.framework.web.tuto.DataInitializerUnitTest
 -------------------------------------------------------------------------------
-Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.459 s - in com.imt.framework.web.tuto.DataInitializerUnitTest
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.142 s - in com.imt.framework.web.tuto.DataInitializerUnitTest

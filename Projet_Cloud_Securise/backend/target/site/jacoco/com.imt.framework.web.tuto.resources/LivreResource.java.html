@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="fr"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LivreResource.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">tuto</a> &gt; <a href="index.source.html" class="el_package">com.imt.framework.web.tuto.resources</a> &gt; <span class="el_source">LivreResource.java</span></div><h1>LivreResource.java</h1><pre class="source lang-java linenums">package com.imt.framework.web.tuto.resources;
+
+import com.imt.framework.web.tuto.entities.Livre;
+import com.imt.framework.web.tuto.repositories.LivreRepository;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.Response;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestBody;
+
+import java.util.Optional;
+
+@Path(&quot;/books&quot;)
+<span class="fc" id="L15">public class LivreResource {</span>
+
+    @Autowired
+    private LivreRepository livreRepository;
+
+    @GET
+    @Produces(&quot;application/json&quot;)
+    public Response getBooks(@QueryParam(&quot;maxPrice&quot;) final Double maxPrice){
+<span class="fc bfc" id="L23" title="All 2 branches covered.">        if(maxPrice != null){</span>
+<span class="fc" id="L24">            return Response.ok()</span>
+<span class="fc" id="L25">            .entity(livreRepository.getBooksWithMaxPrice(maxPrice))</span>
+<span class="fc" id="L26">            .header(&quot;Access-Control-Allow-Origin&quot;, &quot;*&quot;)</span>
+<span class="fc" id="L27">            .build();</span>
+        }
+<span class="fc" id="L29">        return Response.ok()</span>
+<span class="fc" id="L30">               .entity(livreRepository.findAll())</span>
+<span class="fc" id="L31">               .header(&quot;Access-Control-Allow-Origin&quot;, &quot;*&quot;)</span>
+<span class="fc" id="L32">               .build();</span>
+    }
+
+    @POST
+    @Consumes(&quot;application/json&quot;)
+    public void createBook(@NotNull @RequestBody Livre livre){
+<span class="fc" id="L38">        livreRepository.save(livre);</span>
+<span class="fc" id="L39">    }</span>
+
+    @PATCH
+    @Consumes
+    @Path(&quot;/{id}&quot;)
+    public void updateBook(@NotNull @PathParam(&quot;id&quot;) Integer id, @NotNull @RequestBody Livre livre) throws Exception {
+<span class="fc" id="L45">        Optional&lt;Livre&gt; l = livreRepository.findById(id);</span>
+
+<span class="fc bfc" id="L47" title="All 2 branches covered.">        if(l.isEmpty()) {</span>
+<span class="fc" id="L48">            throw new Exception(&quot;Livre inconnu&quot;);</span>
+        }
+        else {
+<span class="fc" id="L51">            Livre livreToUpdate = l.get();</span>
+<span class="fc" id="L52">            livreToUpdate.setAuteur(livre.getAuteur());</span>
+<span class="fc" id="L53">            livreToUpdate.setPrice(livre.getPrice());</span>
+<span class="fc" id="L54">            livreToUpdate.setTitre(livre.getTitre());</span>
+
+<span class="fc" id="L56">            livreRepository.save(livreToUpdate);</span>
+        }
+<span class="fc" id="L58">    }</span>
+
+    @DELETE
+    @Path(&quot;/{id}&quot;)
+    public void deleteBook(@NotNull @PathParam(&quot;id&quot;) final Integer id){
+<span class="fc" id="L63">        livreRepository.deleteById(id);</span>
+<span class="fc" id="L64">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>
