@@ -149,6 +149,133 @@ async function fetchJobs(owner, repo, run_id) {
   return res.json();
 }
 
+async function fetchRunLogsZip(owner, repo, run_id) {
+  const url = `/api/run-logs/${run_id}?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
+  const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+  if (res.status === 401) {
+    showLogin();
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to fetch logs: ${res.status}`);
+  }
+  return res.arrayBuffer();
+}
+
+function normalizeKey(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\.(txt|log)$/g, '')
+    .replace(/^[0-9]+[_ -]*/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function bestLogMatchForJob(jobName, logFiles) {
+  const target = normalizeKey(jobName);
+  if (!target) return null;
+
+  let best = null;
+  let bestScore = -1;
+
+  for (const f of logFiles) {
+    const base = f.name.split('/').pop();
+    const key = normalizeKey(base);
+    if (!key) continue;
+
+    let score = 0;
+    if (key === target) score = 100;
+    else if (key.includes(target)) score = 80;
+    else if (target.includes(key)) score = 60;
+    else {
+      // light token overlap scoring
+      const targetTokens = new Set(target.split(' '));
+      const keyTokens = key.split(' ');
+      const overlap = keyTokens.filter(t => targetTokens.has(t)).length;
+      score = overlap;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = f;
+    }
+  }
+
+  return bestScore >= 2 ? best : best; // allow weak matches; we fallback to showing full job log anyway
+}
+
+function sliceLogForStep(logText, stepName) {
+  const text = String(logText || '');
+  const name = String(stepName || '').trim();
+  if (!text) return { ok: false, content: '' };
+  if (!name) return { ok: false, content: text };
+
+  const lines = text.split(/\r?\n/);
+
+  // Prefer GitHub Actions grouping markers.
+  const groupPrefix = '##[group]';
+  const endGroupPrefix = '##[endgroup]';
+
+  let startIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith(groupPrefix) && line.toLowerCase().includes(name.toLowerCase())) {
+      startIdx = i;
+      break;
+    }
+  }
+
+  if (startIdx === -1) {
+    // Fallback: first line containing the step name
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].toLowerCase().includes(name.toLowerCase())) {
+        startIdx = Math.max(0, i - 1);
+        break;
+      }
+    }
+  }
+
+  if (startIdx === -1) {
+    return { ok: false, content: text };
+  }
+
+  let endIdx = lines.length;
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith(endGroupPrefix)) {
+      endIdx = i + 1;
+      break;
+    }
+    if (line.startsWith(groupPrefix)) {
+      endIdx = i;
+      break;
+    }
+  }
+
+  return { ok: true, content: lines.slice(startIdx, endIdx).join('\n') };
+}
+
+function ensureJsZip() {
+  if (typeof JSZip === 'undefined') {
+    throw new Error('JSZip not loaded (check index.html includes jszip)');
+  }
+}
+
+async function unzipTextLogs(zipArrayBuffer) {
+  ensureJsZip();
+  const zip = await JSZip.loadAsync(zipArrayBuffer);
+  const files = [];
+  const entries = Object.values(zip.files);
+  for (const entry of entries) {
+    if (entry.dir) continue;
+    if (!/\.(txt|log)$/i.test(entry.name)) continue;
+    const content = await entry.async('string');
+    files.push({ name: entry.name, content });
+  }
+  return files;
+}
+
 function renderRuns(data, owner, repo) {
   runsEl.innerHTML = '<div id="chart-container"><canvas id="workflowChart"></canvas></div>';
   const runs = data.workflow_runs || [];
@@ -176,27 +303,125 @@ function renderRuns(data, owner, repo) {
     `;
     container.appendChild(header);
 
+    const details = document.createElement('div');
+    details.className = 'run-details';
+    details.style.display = 'none';
+
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'run-actions';
+    const downloadLink = document.createElement('a');
+    downloadLink.className = 'run-download';
+    downloadLink.href = `/api/run-logs/${run.id}?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
+    downloadLink.textContent = 'Download run logs (zip)';
+    downloadLink.target = '_blank';
+    actionsRow.appendChild(downloadLink);
+    details.appendChild(actionsRow);
+
     const jobsContainer = document.createElement('div');
     jobsContainer.className = 'jobs';
-    jobsContainer.textContent = 'Loading jobs...';
-    container.appendChild(jobsContainer);
+    jobsContainer.textContent = 'Click to load jobs + logs...';
+    details.appendChild(jobsContainer);
+
+    const viewer = document.createElement('div');
+    viewer.className = 'log-viewer';
+    const viewerTitle = document.createElement('div');
+    viewerTitle.className = 'log-viewer-title';
+    viewerTitle.textContent = 'Step logs';
+    const viewerNote = document.createElement('div');
+    viewerNote.className = 'log-viewer-note';
+    viewerNote.textContent = 'Select a step to view its raw logs.';
+    const pre = document.createElement('pre');
+    pre.className = 'log-pre';
+    pre.textContent = '';
+    viewer.appendChild(viewerTitle);
+    viewer.appendChild(viewerNote);
+    viewer.appendChild(pre);
+    details.appendChild(viewer);
+
+    container.appendChild(details);
 
     runsEl.appendChild(container);
 
-    // fetch jobs
-    fetchJobs(owner, repo, run.id)
-      .then(j => {
+    let loaded = false;
+    let logFiles = null;
+
+    header.addEventListener('click', async () => {
+      const isOpen = details.style.display !== 'none';
+      details.style.display = isOpen ? 'none' : 'block';
+      if (isOpen) return;
+      if (loaded) return;
+
+      loaded = true;
+      jobsContainer.textContent = 'Loading jobs + logs...';
+
+      try {
+        const [jobsData, zipBuf] = await Promise.all([
+          fetchJobs(owner, repo, run.id),
+          fetchRunLogsZip(owner, repo, run.id)
+        ]);
+
+        logFiles = await unzipTextLogs(zipBuf);
+
         jobsContainer.innerHTML = '';
-        j.jobs.forEach(job => {
-          const jobEl = document.createElement('div');
-          jobEl.className = 'job ' + (job.conclusion || job.status || '').toLowerCase();
-          jobEl.innerHTML = `<strong>${job.name}</strong> — ${job.status} ${job.conclusion ? '• ' + job.conclusion : ''} <span class="small">(${job.runner_name || 'runner'})</span>`;
-          jobsContainer.appendChild(jobEl);
-        })
-      })
-      .catch(err => {
-        jobsContainer.textContent = 'Failed to load jobs: ' + err.message;
-      });
+        const jobs = jobsData.jobs || [];
+        if (jobs.length === 0) {
+          jobsContainer.textContent = 'No jobs found for this run.';
+          return;
+        }
+
+        jobs.forEach(job => {
+          const jobBlock = document.createElement('div');
+          jobBlock.className = 'job-block';
+
+          const jobHeader = document.createElement('div');
+          jobHeader.className = 'job ' + (job.conclusion || job.status || '').toLowerCase();
+          jobHeader.innerHTML = `<strong>${job.name}</strong> — ${job.status} ${job.conclusion ? '• ' + job.conclusion : ''} <span class="small">(${job.runner_name || 'runner'})</span>`;
+          jobBlock.appendChild(jobHeader);
+
+          const stepsWrap = document.createElement('div');
+          stepsWrap.className = 'steps';
+          const steps = job.steps || [];
+          if (steps.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = 'No step metadata available.';
+            stepsWrap.appendChild(empty);
+          } else {
+            steps.forEach(step => {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'step-btn ' + (step.conclusion || step.status || '').toLowerCase();
+              btn.textContent = `${step.name} — ${step.status}${step.conclusion ? ' • ' + step.conclusion : ''}`;
+
+              btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+
+                const matched = bestLogMatchForJob(job.name, logFiles || []);
+                if (!matched) {
+                  viewerNote.textContent = 'Could not match a log file for this job; try Download run logs (zip).';
+                  pre.textContent = '';
+                  return;
+                }
+
+                const sliced = sliceLogForStep(matched.content, step.name);
+                viewerTitle.textContent = `${job.name} / ${step.name}`;
+                viewerNote.textContent = sliced.ok
+                  ? 'Showing the exact raw log section for this step.'
+                  : 'Step boundary not found; showing full job log (still exact).';
+                pre.textContent = sliced.content;
+              });
+
+              stepsWrap.appendChild(btn);
+            });
+          }
+          jobBlock.appendChild(stepsWrap);
+
+          jobsContainer.appendChild(jobBlock);
+        });
+      } catch (err) {
+        jobsContainer.textContent = 'Failed to load jobs/logs: ' + err.message;
+      }
+    });
   });
 
   updateChart(successCount, failureCount);

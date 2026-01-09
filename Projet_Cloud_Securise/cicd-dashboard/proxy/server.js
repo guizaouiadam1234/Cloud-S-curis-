@@ -5,6 +5,7 @@ const passport = require('passport');
 const GitHubStrategy = require('passport-github2').Strategy;
 const fetch = require('node-fetch');
 const cors = require('cors');
+const { pipeline } = require('stream');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -260,6 +261,45 @@ app.get('/api/jobs/:runId', async (req, res) => {
     });
     const data = await r.json();
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Download the full logs for a workflow run (ZIP).
+// GitHub returns a redirect to a temporary storage URL; node-fetch follows it.
+app.get('/api/run-logs/:runId', async (req, res) => {
+  const { owner, repo } = req.query;
+  const runId = req.params.runId;
+  if (!owner || !repo) return res.status(400).json({ error: 'owner & repo required' });
+
+  try {
+    const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs/${runId}/logs`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `token ${req.user.accessToken}`
+      },
+      redirect: 'follow'
+    });
+
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      return res.status(r.status).json({ error: text || `Failed to fetch logs (${r.status})` });
+    }
+
+    res.setHeader('Content-Type', r.headers.get('content-type') || 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="run-${runId}-logs.zip"`);
+
+    pipeline(r.body, res, (err) => {
+      if (err) {
+        console.error('Error streaming run logs:', err);
+        if (!res.headersSent) {
+          res.status(500).end('Error streaming logs');
+        } else {
+          res.end();
+        }
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
