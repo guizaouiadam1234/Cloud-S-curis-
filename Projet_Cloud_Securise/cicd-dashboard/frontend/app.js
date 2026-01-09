@@ -14,6 +14,12 @@ const loginInfoEl = document.getElementById('login-info');
 const loginBtn = document.getElementById('login-btn');
 const usersLinkEl = document.getElementById('users-link');
 
+// Modal elements
+const modal = document.getElementById('pipeline-modal');
+const modalHeader = document.getElementById('modal-header');
+const modalDetails = document.getElementById('modal-details');
+const closeBtn = document.querySelector('.close');
+
 let pollInterval = null;
 let workflowChart = null;
 let repoDefaultBranch = null;
@@ -84,6 +90,118 @@ function showUser() {
 function showLogin() {
   userInfoEl.style.display = 'none';
   loginInfoEl.style.display = 'block';
+}
+
+// Modal functions
+function openModal(run, owner, repo) {
+  modalHeader.innerHTML = `<div class="title">${run.name || run.workflow_name} — <span class="small">#${run.run_number}</span></div>
+    <div class="meta">${run.event} • ${run.status} • ${run.conclusion || '---'}</div>`;
+  modalDetails.innerHTML = '<div>Loading details...</div>';
+  modal.style.display = 'block';
+  loadModalDetails(run, owner, repo);
+}
+
+function closeModal() {
+  modal.style.display = 'none';
+}
+
+closeBtn.onclick = closeModal;
+
+window.onclick = function(event) {
+  if (event.target == modal) {
+    closeModal();
+  }
+}
+
+async function loadModalDetails(run, owner, repo) {
+  try {
+    const [jobsData, zipBuf] = await Promise.all([
+      fetchJobs(owner, repo, run.id),
+      fetchRunLogsZip(owner, repo, run.id)
+    ]);
+
+    const logFiles = await unzipTextLogs(zipBuf);
+
+    modalDetails.innerHTML = '';
+
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'run-actions';
+    const downloadLink = document.createElement('a');
+    downloadLink.className = 'run-download';
+    downloadLink.href = `/api/run-logs/${run.id}?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
+    downloadLink.textContent = 'Download run logs (zip)';
+    downloadLink.target = '_blank';
+    actionsRow.appendChild(downloadLink);
+    modalDetails.appendChild(actionsRow);
+
+    const jobsContainer = document.createElement('div');
+    jobsContainer.className = 'jobs';
+    const jobs = jobsData.jobs || [];
+    if (jobs.length === 0) {
+      jobsContainer.textContent = 'No jobs found for this run.';
+    } else {
+      jobs.forEach(job => {
+        const jobBlock = document.createElement('div');
+        jobBlock.className = 'job-block';
+
+        const jobHeader = document.createElement('div');
+        jobHeader.className = 'job ' + (job.conclusion || job.status || '').toLowerCase();
+        jobHeader.innerHTML = `<strong>${job.name}</strong> — ${job.status} ${job.conclusion ? '• ' + job.conclusion : ''} <span class="small">(${job.runner_name || 'runner'})</span>`;
+        jobBlock.appendChild(jobHeader);
+
+        const stepsWrap = document.createElement('div');
+        stepsWrap.className = 'steps';
+        const steps = job.steps || [];
+        if (steps.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = 'No step metadata available.';
+          stepsWrap.appendChild(empty);
+        } else {
+          steps.forEach(step => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'step-btn ' + (step.conclusion || step.status || '').toLowerCase();
+            btn.textContent = `${step.name} — ${step.status}${step.conclusion ? ' • ' + step.conclusion : ''}`;
+
+            btn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+
+              const matched = bestLogMatchForJob(job.name, logFiles || []);
+              if (!matched) {
+                alert('Could not match a log file for this job; try Download run logs (zip).');
+                return;
+              }
+
+              const sliced = sliceLogForStep(matched.content, step.name);
+              const logModal = document.createElement('div');
+              logModal.className = 'log-modal';
+              logModal.innerHTML = `
+                <div class="log-modal-content">
+                  <span class="log-close">&times;</span>
+                  <h3>${job.name} / ${step.name}</h3>
+                  <pre class="log-pre">${sliced.content}</pre>
+                </div>
+              `;
+              document.body.appendChild(logModal);
+              logModal.style.display = 'block';
+
+              const logClose = logModal.querySelector('.log-close');
+              logClose.onclick = () => document.body.removeChild(logModal);
+              logModal.onclick = (e) => { if (e.target === logModal) document.body.removeChild(logModal); };
+            });
+
+            stepsWrap.appendChild(btn);
+          });
+        }
+        jobBlock.appendChild(stepsWrap);
+        jobsContainer.appendChild(jobBlock);
+      });
+    }
+    modalDetails.appendChild(jobsContainer);
+  } catch (err) {
+    modalDetails.innerHTML = 'Failed to load details: ' + err.message;
+  }
 }
 
 function updateChart(successCount, failureCount) {
@@ -305,126 +423,41 @@ function renderRuns(data, owner, repo) {
       <div class="title">${run.name || run.workflow_name} — <span class="small">#${run.run_number}</span></div>
       <div class="meta">${run.event} • ${run.status} • ${run.conclusion || '---'}</div>
     `;
+    const seeDetailsBtn = document.createElement('button');
+    seeDetailsBtn.className = 'see-details-btn';
+    seeDetailsBtn.textContent = 'See Details';
+    header.appendChild(seeDetailsBtn);
     container.appendChild(header);
 
-    const details = document.createElement('div');
-    details.className = 'run-details';
-    details.style.display = 'none';
-
-    const actionsRow = document.createElement('div');
-    actionsRow.className = 'run-actions';
-    const downloadLink = document.createElement('a');
-    downloadLink.className = 'run-download';
-    downloadLink.href = `/api/run-logs/${run.id}?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
-    downloadLink.textContent = 'Download run logs (zip)';
-    downloadLink.target = '_blank';
-    actionsRow.appendChild(downloadLink);
-    details.appendChild(actionsRow);
-
-    const jobsContainer = document.createElement('div');
-    jobsContainer.className = 'jobs';
-    jobsContainer.textContent = 'Click to load jobs + logs...';
-    details.appendChild(jobsContainer);
-
-    const viewer = document.createElement('div');
-    viewer.className = 'log-viewer';
-    const viewerTitle = document.createElement('div');
-    viewerTitle.className = 'log-viewer-title';
-    viewerTitle.textContent = 'Step logs';
-    const viewerNote = document.createElement('div');
-    viewerNote.className = 'log-viewer-note';
-    viewerNote.textContent = 'Select a step to view its raw logs.';
-    const pre = document.createElement('pre');
-    pre.className = 'log-pre';
-    pre.textContent = '';
-    viewer.appendChild(viewerTitle);
-    viewer.appendChild(viewerNote);
-    viewer.appendChild(pre);
-    details.appendChild(viewer);
-
-    container.appendChild(details);
+    // Add jobs summary to the tile
+    const jobsSummary = document.createElement('div');
+    jobsSummary.className = 'jobs-summary';
+    jobsSummary.textContent = 'Loading jobs...';
+    container.appendChild(jobsSummary);
 
     runsEl.appendChild(container);
 
-    let loaded = false;
-    let logFiles = null;
-
-    header.addEventListener('click', async () => {
-      const isOpen = details.style.display !== 'none';
-      details.style.display = isOpen ? 'none' : 'block';
-      if (isOpen) return;
-      if (loaded) return;
-
-      loaded = true;
-      jobsContainer.textContent = 'Loading jobs + logs...';
-
-      try {
-        const [jobsData, zipBuf] = await Promise.all([
-          fetchJobs(owner, repo, run.id),
-          fetchRunLogsZip(owner, repo, run.id)
-        ]);
-
-        logFiles = await unzipTextLogs(zipBuf);
-
-        jobsContainer.innerHTML = '';
-        const jobs = jobsData.jobs || [];
-        if (jobs.length === 0) {
-          jobsContainer.textContent = 'No jobs found for this run.';
-          return;
-        }
-
+    // Load jobs for summary
+    fetchJobs(owner, repo, run.id).then(jobsData => {
+      const jobs = jobsData.jobs || [];
+      jobsSummary.innerHTML = '';
+      if (jobs.length === 0) {
+        jobsSummary.textContent = 'No jobs';
+      } else {
         jobs.forEach(job => {
-          const jobBlock = document.createElement('div');
-          jobBlock.className = 'job-block';
-
-          const jobHeader = document.createElement('div');
-          jobHeader.className = 'job ' + (job.conclusion || job.status || '').toLowerCase();
-          jobHeader.innerHTML = `<strong>${job.name}</strong> — ${job.status} ${job.conclusion ? '• ' + job.conclusion : ''} <span class="small">(${job.runner_name || 'runner'})</span>`;
-          jobBlock.appendChild(jobHeader);
-
-          const stepsWrap = document.createElement('div');
-          stepsWrap.className = 'steps';
-          const steps = job.steps || [];
-          if (steps.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'empty';
-            empty.textContent = 'No step metadata available.';
-            stepsWrap.appendChild(empty);
-          } else {
-            steps.forEach(step => {
-              const btn = document.createElement('button');
-              btn.type = 'button';
-              btn.className = 'step-btn ' + (step.conclusion || step.status || '').toLowerCase();
-              btn.textContent = `${step.name} — ${step.status}${step.conclusion ? ' • ' + step.conclusion : ''}`;
-
-              btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-
-                const matched = bestLogMatchForJob(job.name, logFiles || []);
-                if (!matched) {
-                  viewerNote.textContent = 'Could not match a log file for this job; try Download run logs (zip).';
-                  pre.textContent = '';
-                  return;
-                }
-
-                const sliced = sliceLogForStep(matched.content, step.name);
-                viewerTitle.textContent = `${job.name} / ${step.name}`;
-                viewerNote.textContent = sliced.ok
-                  ? 'Showing the exact raw log section for this step.'
-                  : 'Step boundary not found; showing full job log (still exact).';
-                pre.textContent = sliced.content;
-              });
-
-              stepsWrap.appendChild(btn);
-            });
-          }
-          jobBlock.appendChild(stepsWrap);
-
-          jobsContainer.appendChild(jobBlock);
+          const jobItem = document.createElement('div');
+          jobItem.className = 'job-summary ' + (job.conclusion || job.status || '').toLowerCase();
+          jobItem.innerHTML = `<strong>${job.name}</strong> — ${job.status}${job.conclusion ? ' • ' + job.conclusion : ''}`;
+          jobsSummary.appendChild(jobItem);
         });
-      } catch (err) {
-        jobsContainer.textContent = 'Failed to load jobs/logs: ' + err.message;
       }
+    }).catch(err => {
+      jobsSummary.textContent = 'Failed to load jobs';
+    });
+
+    seeDetailsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModal(run, owner, repo);
     });
   });
 
