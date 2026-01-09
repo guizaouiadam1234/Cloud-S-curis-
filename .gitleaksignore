@@ -1,0 +1,4 @@
+# Gitleaks ignore file
+#
+# Leave empty initially. If you hit a false positive, run gitleaks locally to get a finding fingerprint
+# and add it here to suppress that specific match.
