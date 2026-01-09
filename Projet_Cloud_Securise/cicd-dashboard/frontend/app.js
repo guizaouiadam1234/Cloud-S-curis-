@@ -12,6 +12,7 @@ const logoutBtn = document.getElementById('logout-btn');
 const userInfoEl = document.getElementById('user-info');
 const loginInfoEl = document.getElementById('login-info');
 const loginBtn = document.getElementById('login-btn');
+const usersLinkEl = document.getElementById('users-link');
 
 let pollInterval = null;
 let workflowChart = null;
@@ -57,7 +58,7 @@ async function dispatchWorkflow(owner, repo, ref) {
 
 async function loadUserInfo() {
   try {
-    const res = await fetch('/api/user');
+    const res = await fetch('/api/me');
     if (res.status === 401) {
       showLogin();
       return;
@@ -65,6 +66,9 @@ async function loadUserInfo() {
     const user = await res.json();
     userAvatarEl.src = user.avatar;
     userUsernameEl.textContent = user.username;
+    if (usersLinkEl) {
+      usersLinkEl.style.display = user.canManageUsers ? 'inline-block' : 'none';
+    }
     showUser();
   } catch (err) {
     console.error('Failed to load user info:', err);
@@ -453,6 +457,7 @@ startBtn.addEventListener('click', () => {
     setStatus('Provide owner and repo');
     startBtn.disabled = false;
     stopBtn.disabled = true;
+    if (usersLinkEl) usersLinkEl.style.display = 'none';
     return;
   }
 
@@ -464,6 +469,9 @@ startBtn.addEventListener('click', () => {
       const reason = a.deploy_reason ? ` • ${a.deploy_reason}` : '';
       setRole(`Role: ${a.role || 'unknown'}${repoDefaultBranch ? ` • default: ${repoDefaultBranch}` : ''}${canDeploy ? '' : reason}`);
       deployBtn.disabled = !canDeploy;
+      if (usersLinkEl) {
+        usersLinkEl.style.display = a.can_manage_users ? 'inline-block' : 'none';
+      }
       poll();
       pollInterval = setInterval(poll, 15000);
     })
@@ -473,6 +481,7 @@ startBtn.addEventListener('click', () => {
       setStatus('Error: ' + err.message);
       startBtn.disabled = false;
       stopBtn.disabled = true;
+      if (usersLinkEl) usersLinkEl.style.display = 'none';
     });
 });
 

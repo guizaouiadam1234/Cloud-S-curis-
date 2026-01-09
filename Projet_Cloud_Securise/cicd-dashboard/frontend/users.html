@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Users - CI/CD Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>CI/CD Dashboard — Users</h1>
+    <div id="user-info" style="position: absolute; top: 12px; right: 24px; display: flex; align-items: center;">
+      <img id="user-avatar" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px;" />
+      <span id="user-username"></span>
+      <a href="/" class="header-link" style="margin-left: 10px;">Dashboard</a>
+      <button id="logout-btn" style="margin-left: 10px; padding: 5px 10px;">Log out</button>
+    </div>
+  </header>
+
+  <main style="grid-template-columns: 1fr;">
+    <div id="status"></div>
+    <div class="run" style="grid-column: 1 / -1;">
+      <div class="title" style="margin-bottom: 6px;">User permissions</div>
+      <div class="small" style="margin-left: 0; margin-bottom: 10px;">
+        Access is restricted to repo admins of the last selected repository.
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom: 10px; flex-wrap: wrap;">
+        <input id="add-username" placeholder="GitHub username" />
+        <label class="small" style="margin-left: 0; display:flex; align-items:center; gap:6px;">
+          <input id="add-deploy" type="checkbox" /> Allow deploy
+        </label>
+        <button id="add-btn">Add</button>
+        <button id="reload">Reload</button>
+      </div>
+
+      <div id="users" class="users-table-wrap">Loading...</div>
+    </div>
+  </main>
+
+  <script src="users.js"></script>
+</body>
+</html>

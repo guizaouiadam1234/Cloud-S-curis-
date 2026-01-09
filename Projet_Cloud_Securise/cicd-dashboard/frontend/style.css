@@ -27,6 +27,19 @@ main{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:
 .log-viewer-title{font-weight:600;margin-bottom:4px}
 .log-viewer-note{color:var(--muted);font-size:12px;margin-bottom:8px}
 .log-pre{margin:0;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;background:rgba(0,0,0,0.15);border-radius:6px;padding:10px;border:1px solid rgba(255,255,255,0.03)}
+
+.header-link{color:var(--accent);text-decoration:none;font-size:12px}
+.header-link:hover{text-decoration:underline}
+
+.users-table-wrap{overflow:auto}
+.users-table{width:100%;border-collapse:collapse}
+.users-table th,.users-table td{padding:10px 8px;border-top:1px solid rgba(255,255,255,0.04);text-align:left;vertical-align:middle}
+.users-table th{color:var(--muted);font-size:12px;font-weight:600}
+.users-user{display:flex;align-items:center;gap:8px}
+.users-avatar{width:28px;height:28px;border-radius:50%}
+.toggle{display:flex;align-items:center;gap:8px}
+.user-remove{padding:6px 10px;border-radius:6px;border:0;background:var(--err);color:#fff;cursor:pointer}
+.user-remove:disabled{opacity:.6;cursor:not-allowed}
 .title{font-weight:600}
 .meta{color:var(--muted);font-size:12px}
 .jobs{display:flex;flex-direction:column;gap:6px}

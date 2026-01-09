@@ -6,6 +6,7 @@ const GitHubStrategy = require('passport-github2').Strategy;
 const fetch = require('node-fetch');
 const cors = require('cors');
 const { pipeline } = require('stream');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,9 +23,71 @@ function parseCsvList(v) {
 // Example: DEPLOY_ALLOW_USERS="guizaouiadam1234"
 const DEPLOY_ALLOW_USERS = parseCsvList(process.env.DEPLOY_ALLOW_USERS);
 
+const DATA_DIR = path.join(__dirname, 'data');
+const USERS_DB_PATH = path.join(DATA_DIR, 'users.json');
+
+function ensureDataDir() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch {
+    // ignore
+  }
+}
+
+function loadUsersDb() {
+  ensureDataDir();
+  try {
+    const raw = fs.readFileSync(USERS_DB_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return { users: {} };
+    if (!parsed.users || typeof parsed.users !== 'object') parsed.users = {};
+    return parsed;
+  } catch {
+    return { users: {} };
+  }
+}
+
+function saveUsersDb(db) {
+  ensureDataDir();
+  const tmpPath = `${USERS_DB_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(db, null, 2), 'utf8');
+  fs.renameSync(tmpPath, USERS_DB_PATH);
+}
+
+function upsertSeenUser(profile) {
+  const username = profile && profile.username;
+  if (!username) return;
+  const db = loadUsersDb();
+  const existing = db.users[username] || {};
+  const avatar = profile.photos && profile.photos[0] ? profile.photos[0].value : existing.avatar || null;
+  db.users[username] = {
+    username,
+    avatar,
+    lastSeenAt: new Date().toISOString(),
+    // deployAllowed is an extra dashboard-side restriction.
+    // If unset, it means "no explicit dashboard restriction".
+    deployAllowed: typeof existing.deployAllowed === 'boolean' ? existing.deployAllowed : undefined,
+  };
+  saveUsersDb(db);
+}
+
 function isDeployAllowedForUser(githubUsername) {
-  if (DEPLOY_ALLOW_USERS.length === 0) return true; // no restriction configured
-  return DEPLOY_ALLOW_USERS.includes(String(githubUsername || '').trim());
+  const u = String(githubUsername || '').trim();
+  if (!u) return false;
+
+  // 1) Static env allowlist always grants if matched.
+  if (DEPLOY_ALLOW_USERS.length > 0 && DEPLOY_ALLOW_USERS.includes(u)) return true;
+
+  // 2) Managed allowlist from users DB (if set for any user).
+  const db = loadUsersDb();
+  const users = db.users || {};
+  const hasAnyExplicitRule = Object.values(users).some(v => typeof v.deployAllowed === 'boolean');
+  if (hasAnyExplicitRule) {
+    return users[u] && users[u].deployAllowed === true;
+  }
+
+  // 3) Default: allow (no restriction configured).
+  return true;
 }
 
 passport.serializeUser((user, done) => {
@@ -45,6 +108,14 @@ app.use(passport.session());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Track authenticated users so they can appear in the Users list.
+app.use((req, _res, next) => {
+  if (req.isAuthenticated && req.isAuthenticated() && req.user) {
+    try { upsertSeenUser(req.user); } catch { /* ignore */ }
+  }
+  next();
+});
 
 // Auth setup route
 app.post('/auth/setup', (req, res) => {
@@ -135,6 +206,15 @@ app.get('/api/user', ensureAuthenticated, (req, res) => {
   });
 });
 
+app.get('/api/me', ensureAuthenticated, (req, res) => {
+  res.json({
+    username: req.user.username,
+    avatar: req.user.photos ? req.user.photos[0].value : null,
+    canManageUsers: !!req.session.can_manage_users,
+    lastRepo: req.session.last_owner && req.session.last_repo ? { owner: req.session.last_owner, repo: req.session.last_repo } : null
+  });
+});
+
 app.post('/api/logout', (req, res, next) => {
   req.logout((err) => {
     if (err) { return next(err); }
@@ -174,6 +254,21 @@ async function fetchRepo(owner, repo, token) {
   return r.json();
 }
 
+async function fetchCollaborators(owner, repo, token) {
+  // Requires repo access; for orgs, listing may be limited by org settings.
+  const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/collaborators?per_page=100`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `token ${token}`
+    }
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(data.message || `GitHub API error (${r.status})`);
+  }
+  return r.json();
+}
+
 function roleFromPermissions(permissions) {
   if (!permissions) return 'viewer';
   if (permissions.admin) return 'admin';
@@ -181,12 +276,139 @@ function roleFromPermissions(permissions) {
   return 'viewer';
 }
 
+async function ensureUserManager(req, res, next) {
+  // Admin-only: requires repo admin on the selected repository.
+  const owner = req.query.owner || req.session.last_owner;
+  const repo = req.query.repo || req.session.last_repo;
+  if (!owner || !repo) {
+    return res.status(400).json({ error: 'owner & repo required (open dashboard and click Start first)' });
+  }
+
+  try {
+    const repoInfo = await fetchRepo(owner, repo, req.user.accessToken);
+    const role = roleFromPermissions(repoInfo.permissions);
+    if (role === 'admin') return next();
+    return res.status(403).json({ error: 'Forbidden: requires repo admin' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// List all known users + their dashboard deploy permission override.
+app.get('/api/users', ensureAuthenticated, ensureUserManager, (req, res) => {
+  const owner = req.query.owner || req.session.last_owner;
+  const repo = req.query.repo || req.session.last_repo;
+  const db = loadUsersDb();
+  const dbUsers = db.users || {};
+
+  // Start with users we have stored.
+  const merged = new Map();
+  for (const [username, u] of Object.entries(dbUsers)) {
+    merged.set(username, {
+      username,
+      avatar: u.avatar || null,
+      lastSeenAt: u.lastSeenAt || null,
+      deployAllowed: typeof u.deployAllowed === 'boolean' ? u.deployAllowed : undefined,
+      source: 'db'
+    });
+  }
+
+  // Also include repo collaborators so admins can manage users who never logged in.
+  (async () => {
+    try {
+      if (owner && repo) {
+        const collabs = await fetchCollaborators(owner, repo, req.user.accessToken);
+        for (const c of collabs) {
+          const username = c.login;
+          const existing = merged.get(username);
+          merged.set(username, {
+            username,
+            avatar: c.avatar_url || (existing && existing.avatar) || null,
+            lastSeenAt: (existing && existing.lastSeenAt) || null,
+            deployAllowed: existing ? existing.deployAllowed : undefined,
+            source: existing ? existing.source : 'github'
+          });
+        }
+      }
+    } catch (err) {
+      // If GitHub refuses collaborator listing, still return DB users.
+      console.warn('Failed to list collaborators:', err.message);
+    }
+
+    const users = Array.from(merged.values());
+    users.sort((a, b) => String(a.username).localeCompare(String(b.username)));
+    res.json({ users });
+  })();
+});
+
+// Add a user to the dashboard-managed list (even if they never logged in).
+app.post('/api/users', ensureAuthenticated, ensureUserManager, (req, res) => {
+  const { username, deployAllowed } = req.body || {};
+  const u = String(username || '').trim();
+  if (!u) return res.status(400).json({ error: 'username required' });
+  if (typeof deployAllowed !== 'undefined' && typeof deployAllowed !== 'boolean') {
+    return res.status(400).json({ error: 'deployAllowed must be boolean if provided' });
+  }
+
+  const db = loadUsersDb();
+  const existing = db.users[u] || { username: u };
+  db.users[u] = {
+    username: u,
+    avatar: existing.avatar || null,
+    lastSeenAt: existing.lastSeenAt || null,
+    deployAllowed: typeof deployAllowed === 'boolean' ? deployAllowed : (typeof existing.deployAllowed === 'boolean' ? existing.deployAllowed : undefined)
+  };
+  saveUsersDb(db);
+  res.json({ ok: true, user: db.users[u] });
+});
+
+// Update a user's dashboard deploy permission.
+app.put('/api/users/:username', ensureAuthenticated, ensureUserManager, (req, res) => {
+  const target = String(req.params.username || '').trim();
+  if (!target) return res.status(400).json({ error: 'username required' });
+
+  const { deployAllowed } = req.body || {};
+  if (typeof deployAllowed !== 'boolean') {
+    return res.status(400).json({ error: 'deployAllowed must be boolean' });
+  }
+
+  const db = loadUsersDb();
+  const existing = db.users[target] || { username: target };
+  db.users[target] = {
+    username: target,
+    avatar: existing.avatar || null,
+    lastSeenAt: existing.lastSeenAt || null,
+    deployAllowed
+  };
+  saveUsersDb(db);
+  res.json({ ok: true, user: db.users[target] });
+});
+
+// Remove a user from the dashboard-managed list.
+// Note: if they are a repo collaborator, they can still appear in the list (source=github)
+// but will have no dashboard override after deletion.
+app.delete('/api/users/:username', ensureAuthenticated, ensureUserManager, (req, res) => {
+  const target = String(req.params.username || '').trim();
+  if (!target) return res.status(400).json({ error: 'username required' });
+  const db = loadUsersDb();
+  if (db.users && db.users[target]) {
+    delete db.users[target];
+    saveUsersDb(db);
+  }
+  res.json({ ok: true });
+});
+
 app.get('/api/access', async (req, res) => {
   const { owner, repo } = req.query;
   if (!owner || !repo) return res.status(400).json({ error: 'owner & repo required' });
   try {
     const repoInfo = await fetchRepo(owner, repo, req.user.accessToken);
     const role = roleFromPermissions(repoInfo.permissions);
+
+    // Remember last selected repo for /users management.
+    req.session.last_owner = owner;
+    req.session.last_repo = repo;
+    req.session.can_manage_users = role === 'admin';
 
     const hasRepoDeployRight = role === 'admin' || role === 'deployer';
     const isAllowedUser = isDeployAllowedForUser(req.user.username);
@@ -199,6 +421,7 @@ app.get('/api/access', async (req, res) => {
       owner,
       repo,
       role,
+      can_manage_users: role === 'admin',
       can_deploy,
       deploy_reason,
       permissions: repoInfo.permissions || null,
@@ -344,6 +567,10 @@ app.get('/', (req, res) => {
   } else {
     res.redirect('/login');
   }
+});
+
+app.get('/users', ensureAuthenticated, (req, res) => {
+  res.sendFile(path.join(staticFolder, 'users.html'));
 });
 
 app.get('*', ensureAuthenticated, (req, res) => {
