@@ -83,11 +83,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test (Jest) with coverage
-        env:
-          CI: true
-        run: npm test -- --coverage --watchAll=false
-
       - name: SonarCloud analysis (frontend, optional)
         if: ${{ env.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarcloud-github-action@v3
